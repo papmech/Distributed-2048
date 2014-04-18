@@ -5,6 +5,7 @@ import (
 	"distributed2048/util"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -21,7 +22,8 @@ var LOGV = util.NewLogger(DEBUG_LOG, "DEBUG", os.Stdout)
 var LOGE = util.NewLogger(ERROR_LOG, "ERROR", os.Stderr)
 
 type gameServer struct {
-	info centralrpc.Node
+	info        centralrpc.Node
+	clientCount int
 }
 
 type centralServer struct {
@@ -34,6 +36,10 @@ type centralServer struct {
 }
 
 func NewCentralServer(port, numGameServers int) (CentralServer, error) {
+	if numGameServers < 1 {
+		return nil, errors.New("numGameServers must be at least 1")
+	}
+
 	cs := &centralServer{
 		numGameServers:   numGameServers,
 		gameServers:      make(map[uint32]*gameServer),
@@ -52,7 +58,19 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 }
 
 func (cs *centralServer) GetGameServerForClient(args *centralrpc.GetGameServerForClientArgs, reply *centralrpc.GetGameServerForClientReply) error {
-	return errors.New("Not implemented")
+	cs.gameServersLock.Lock()
+	if len(cs.gameServers) < cs.numGameServers {
+		// Not all game servers have connected to the ring, so reply with NotReady
+		reply.Status = centralrpc.NotReady
+	} else {
+		id := cs.getGameServerIDMinClients()
+		cs.gameServers[id].clientCount++
+		reply.Status = centralrpc.OK
+		reply.HostPort = cs.gameServers[id].info.HostPort
+	}
+	cs.gameServersLock.Unlock()
+
+	return nil
 }
 
 func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerArgs, reply *centralrpc.RegisterGameServerReply) error {
@@ -69,7 +87,7 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 		hostport := args.HostPort
 
 		// Add new server object to map
-		gs = &gameServer{centralrpc.Node{id, hostport}}
+		gs = &gameServer{centralrpc.Node{id, hostport}, 0}
 		cs.gameServers[id] = gs
 		cs.hostPortToGameServer[hostport] = gs
 	} else {
@@ -99,4 +117,17 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 	cs.gameServersLock.Unlock()
 
 	return nil
+}
+
+func (cs *centralServer) getGameServerIDMinClients() uint32 {
+	// Must be called with the LOCK acquired
+	min := math.MaxInt32
+	var resultID uint32
+	for _, gs := range cs.gameServers {
+		if gs.clientCount < min {
+			min = gs.clientCount
+			resultID = gs.info.NodeID
+		}
+	}
+	return resultID
 }

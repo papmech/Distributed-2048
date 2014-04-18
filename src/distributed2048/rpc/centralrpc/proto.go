@@ -8,8 +8,8 @@ const (
 )
 
 type Node struct {
-	HostPort string
 	NodeID   uint32
+	HostPort string
 }
 
 type GetGameServerForClientArgs struct {
@@ -27,5 +27,6 @@ type RegisterGameServerArgs struct {
 
 type RegisterGameServerReply struct {
 	Status       Status
-	GameServerID int // Unique ID
+	GameServerID uint32 // Unique ID
+	Servers      []Node
 }

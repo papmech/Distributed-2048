@@ -4,6 +4,7 @@ import (
 	"distributed2048/centralserver"
 	"flag"
 	"fmt"
+	"os"
 )
 
 const defaultCentralServerPort = 15340
@@ -19,8 +20,10 @@ func main() {
 	if err != nil {
 		fmt.Println("Could not create central server.")
 		fmt.Println(err)
-		return 1
+		os.Exit(1)
 	}
 
 	fmt.Println(a)
+
+	os.Exit(0)
 }

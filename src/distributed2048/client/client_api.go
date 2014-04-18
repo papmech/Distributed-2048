@@ -1,4 +1,4 @@
-// This is the api for a 2048 client interface
+// This is the api for a 2048 client
 
 package client
 

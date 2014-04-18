@@ -4,6 +4,7 @@ type Status int
 
 const (
 	OK Status = iota + 1 // RPC was a success
+	NotReady
 )
 
 type Node struct {

@@ -16,14 +16,15 @@ var (
 
 func main() {
 	flag.Parse()
-	a, err := centralserver.NewCentralServer(*port, *numGameServers)
+	_, err := centralserver.NewCentralServer(*port, *numGameServers)
 	if err != nil {
 		fmt.Println("Could not create central server.")
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	fmt.Println(a)
+	fmt.Println("Central Server running on port", *port)
 
-	os.Exit(0)
+	// Run the central server forever
+	select {}
 }

@@ -1,6 +1,7 @@
 package libpaxos
 
 import (
+	"distributed2048/gameserver"
 	"distributed2048/rpc/paxosrpc"
 	"errors"
 )
@@ -33,7 +34,7 @@ func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxos
 
 }
 
-func (lp *libpaxos) Propose(interface{}) error {
+func (lp *libpaxos) Propose(moves []gameserver.Move) error {
 	return errors.New("Not implemented yet")
 
 }

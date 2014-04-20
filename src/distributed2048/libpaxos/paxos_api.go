@@ -10,9 +10,9 @@ type PaxosNode struct {
 }
 
 type Libpaxos interface {
-	ReceiveProposal(args *paxosrpc.ReceiveProposalArgs, reply *paxosrpc.ReceiveProposalReply) error
-	ReceiveCommit(args *paxosrpc.ReceiveCommitArgs, reply *paxosrpc.ReceiveCommitReply) error
-	ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxosrpc.ReceiveDecideReply) error
-	Propose(interface{}) error
+	ReceiveProposal(*paxosrpc.ReceiveProposalArgs, *paxosrpc.ReceiveProposalReply) error
+	ReceiveCommit(*paxosrpc.ReceiveCommitArgs, *paxosrpc.ReceiveCommitReply) error
+	ReceiveDecide(*paxosrpc.ReceiveDecideArgs, *paxosrpc.ReceiveDecideReply) error
+	Propose([]gameserver.Move) error
 	DecidedHandler(func(interface{}) error)
 }

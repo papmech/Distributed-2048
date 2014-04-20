@@ -4,7 +4,13 @@ import (
 	"distributed2048/gameserver"
 	"distributed2048/rpc/paxosrpc"
 	"errors"
+	"net/rpc"
 )
+
+type node struct {
+	info   PaxosNode
+	client *rpc.Client
+}
 
 type libpaxos struct {
 	allNodes       []PaxosNode
@@ -35,6 +41,7 @@ func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxos
 }
 
 func (lp *libpaxos) Propose(moves []gameserver.Move) error {
+
 	return errors.New("Not implemented yet")
 
 }

@@ -4,10 +4,10 @@ import (
 	"distributed2048/gameserver"
 )
 
-type Proposal struct {
+type proposal struct {
 	Moves []gameserver.Move
 }
 
-func NewProposal(moves []gameserver.Move) *Proposal {
-	return &Proposal{moves}
+func newProposal(moves []gameserver.Move) *proposal {
+	return &proposal{moves}
 }

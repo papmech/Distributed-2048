@@ -10,5 +10,8 @@ type GameServer interface {
 	DoVote() ()
 	AddVote() ()
 	SetVoteResult() ()
+	NewServer(pattern string) *GameServer
+	ListenForClients()
+
 }
 

@@ -7,11 +7,6 @@ import (
 	"net/rpc"
 )
 
-type node struct {
-	info   PaxosNode
-	client *rpc.Client
-}
-
 type libpaxos struct {
 	allNodes       []PaxosNode
 	myPort         int
@@ -30,7 +25,7 @@ func (lp *libpaxos) ReceiveProposal(args *paxosrpc.ReceiveProposalArgs, reply *p
 	return errors.New("Not implemented yet")
 }
 
-func (lp *libpaxos) ReceiveCommit(args *paxosrpc.ReceiveCommitArgs, reply *paxosrpc.ReceiveCommitReply) error {
+func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxosrpc.ReceiveAcceptReply) error {
 	return errors.New("Not implemented yet")
 
 }

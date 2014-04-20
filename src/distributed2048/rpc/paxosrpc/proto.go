@@ -6,17 +6,19 @@ const (
 	OK Status = iota + 1
 )
 
-type ReceiveProposalArgs struct {
+type ReceivePrepareArgs struct {
+	NodeID   int
+	Proposal Proposal
 }
 
-type ReceiveProposalReply struct {
+type ReceivePrepareReply struct {
 	Status Status
 }
 
-type ReceiveCommitArgs struct {
+type ReceiveAcceptArgs struct {
 }
 
-type ReceiveCommitReply struct {
+type ReceiveAcceptReply struct {
 }
 
 type ReceiveDecideArgs struct {

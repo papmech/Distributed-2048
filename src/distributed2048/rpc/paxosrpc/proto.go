@@ -4,15 +4,24 @@ type Status int
 
 const (
 	OK Status = iota + 1
+	Accept
+	Reject
 )
 
+type Node struct {
+	ID       uint32
+	HostPort string
+}
+
 type ReceivePrepareArgs struct {
-	NodeID   int
+	Node     Node
 	Proposal Proposal
 }
 
 type ReceivePrepareReply struct {
-	Status Status
+	Status                Status
+	HighestProposalNumber ProposalNumber
+	HighestProposal       Proposal
 }
 
 type ReceiveAcceptArgs struct {

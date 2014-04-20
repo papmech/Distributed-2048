@@ -1,16 +1,16 @@
 package centralrpc
 
+import (
+	"distributed2048/rpc/paxosrpc"
+)
+
 type Status int
 
 const (
 	OK Status = iota + 1 // RPC was a success
 	NotReady
+	Full
 )
-
-type Node struct {
-	NodeID   uint32
-	HostPort string
-}
 
 type GetGameServerForClientArgs struct {
 	// nothing here
@@ -28,5 +28,5 @@ type RegisterGameServerArgs struct {
 type RegisterGameServerReply struct {
 	Status       Status
 	GameServerID uint32 // Unique ID
-	Servers      []Node
+	Servers      []paxosrpc.Node
 }

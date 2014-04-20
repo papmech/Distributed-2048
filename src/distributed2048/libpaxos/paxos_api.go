@@ -1,7 +1,6 @@
 package libpaxos
 
 import (
-	"distributed2048/gameserver"
 	"distributed2048/rpc/paxosrpc"
 )
 
@@ -17,6 +16,6 @@ type Libpaxos interface {
 	ReceiveDecide(*paxosrpc.ReceiveDecideArgs, *paxosrpc.ReceiveDecideReply) error
 	// Propose will propose a new value among the other nodes. It will block
 	// until the proposal has been successfully accepted.
-	Propose([]gameserver.Move) error
+	Propose([]paxosrpc.Move) error
 	// DecidedHandler(func([]gameserver.Move) error)
 }

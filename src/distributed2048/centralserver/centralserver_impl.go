@@ -3,6 +3,7 @@ package centralserver
 import (
 	"distributed2048/rpc/centralrpc"
 	"distributed2048/util"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -45,6 +46,9 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 		gameServers:      make(map[uint32]*gameServer),
 		gameServersSlice: nil,
 	}
+
+	// Serve up information for the game client
+	http.HandleFunc("/client/", cs.gameClientViewHandler)
 
 	rpc.RegisterName("CentralServer", centralrpc.Wrap(cs))
 	rpc.HandleHTTP()
@@ -117,6 +121,33 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 	cs.gameServersLock.Unlock()
 
 	return nil
+}
+
+type HttpReply struct {
+	Status   string
+	Hostport string
+}
+
+func (cs *centralServer) gameClientViewHandler(w http.ResponseWriter, r *http.Request) {
+	reply := HttpReply{}
+	cs.gameServersLock.Lock()
+	if len(cs.gameServers) < cs.numGameServers {
+		// Not all game servers have connected to the ring, so reply with NotReady
+		reply.Status = "NotReady"
+	} else {
+		id := cs.getGameServerIDMinClients()
+		cs.gameServers[id].clientCount++
+		reply.Status = "OK"
+		reply.Hostport = cs.gameServers[id].info.HostPort
+	}
+	cs.gameServersLock.Unlock()
+
+	buf, err := json.Marshal(reply)
+	if err != nil {
+		http.Error(w, fmt.Sprintln(err), 500)
+		return
+	}
+	fmt.Fprintf(w, "%s", string(buf))
 }
 
 func (cs *centralServer) getGameServerIDMinClients() uint32 {

@@ -52,18 +52,17 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		LOGV.Println("a new request was made with URI " + r.RequestURI)
 		reply := HttpReply{}
-//		cs.gameServersLock.Lock()
+		cs.gameServersLock.Lock()
 		if len(cs.gameServers) < cs.numGameServers {
 			// Not all game servers have connected to the ring, so reply with NotReady
 			reply.Status = "NotReady"
-			reply.Hostport = ""
 		} else {
 			id := cs.getGameServerIDMinClients()
 			cs.gameServers[id].clientCount++
 			reply.Status = "OK"
 			reply.Hostport = cs.gameServers[id].info.HostPort
 		}
-//		cs.gameServersLock.Unlock()
+		cs.gameServersLock.Unlock()
 		LOGV.Println("testing if it reaches this point")
 		buf, err := json.Marshal(reply)
 		if err == nil {

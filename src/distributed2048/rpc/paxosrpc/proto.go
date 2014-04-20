@@ -2,16 +2,16 @@ package paxosrpc
 
 type Status int
 
+type Node struct {
+	ID       uint32
+	HostPort string
+}
+
 const (
 	OK Status = iota + 1
 	Accept
 	Reject
 )
-
-type Node struct {
-	ID       uint32
-	HostPort string
-}
 
 type ReceivePrepareArgs struct {
 	Node     Node

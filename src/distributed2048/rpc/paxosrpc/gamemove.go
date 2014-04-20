@@ -1,4 +1,4 @@
-package gameserver
+package paxosrpc
 
 import (
 	"time"
@@ -16,4 +16,8 @@ const (
 type Move struct {
 	Time      time.Time
 	Direction Direction
+}
+
+func NewMove(dir Direction) *Move {
+	return &Move{time.Now(), dir}
 }

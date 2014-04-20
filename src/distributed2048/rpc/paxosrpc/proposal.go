@@ -1,9 +1,5 @@
 package paxosrpc
 
-import (
-	"distributed2048/gameserver"
-)
-
 type ProposalNumber struct {
 	Number uint32
 	NodeID uint32
@@ -23,10 +19,10 @@ func (a *ProposalNumber) GreaterThan(b ProposalNumber) bool {
 
 type Proposal struct {
 	Number ProposalNumber
-	Value  []gameserver.Move
+	Value  []Move
 }
 
-func NewProposal(number, nodeID uint32, moves []gameserver.Move) *Proposal {
+func NewProposal(number, nodeID uint32, moves []Move) *Proposal {
 	return &Proposal{
 		ProposalNumber{number, nodeID},
 		moves,

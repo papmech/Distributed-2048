@@ -2,6 +2,7 @@ package centralserver
 
 import (
 	"distributed2048/rpc/centralrpc"
+	"distributed2048/rpc/paxosrpc"
 	"distributed2048/util"
 	"encoding/json"
 	"errors"
@@ -23,7 +24,7 @@ var LOGV = util.NewLogger(DEBUG_LOG, "DEBUG", os.Stdout)
 var LOGE = util.NewLogger(ERROR_LOG, "ERROR", os.Stderr)
 
 type gameServer struct {
-	info        centralrpc.Node
+	info        paxosrpc.Node
 	clientCount int
 }
 
@@ -32,7 +33,7 @@ type centralServer struct {
 	gameServersLock      sync.Mutex
 	gameServers          map[uint32]*gameServer
 	hostPortToGameServer map[string]*gameServer
-	gameServersSlice     []centralrpc.Node
+	gameServersSlice     []paxosrpc.Node
 	numGameServers       int
 }
 
@@ -43,9 +44,10 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 	}
 
 	cs := &centralServer{
-		numGameServers:   numGameServers,
-		gameServers:      make(map[uint32]*gameServer),
-		gameServersSlice: nil,
+		numGameServers:       numGameServers,
+		gameServers:          make(map[uint32]*gameServer),
+		hostPortToGameServer: make(map[string]*gameServer),
+		gameServersSlice:     nil,
 	}
 
 	// Serve up information for the game client
@@ -85,6 +87,14 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 	var id uint32
 	if gs, exists := cs.hostPortToGameServer[args.HostPort]; !exists {
 
+		// Check if we hit the limit
+		if len(cs.gameServers) >= cs.numGameServers {
+			LOGE.Println("Received request to register game server when ring is FULL")
+			reply.Status = centralrpc.Full
+			cs.gameServersLock.Unlock()
+			return nil
+		}
+
 		// Get a new ID
 		id = cs.nextGameServerID
 		cs.nextGameServerID++
@@ -93,11 +103,11 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 		hostport := args.HostPort
 
 		// Add new server object to map
-		gs = &gameServer{centralrpc.Node{id, hostport}, 0}
+		gs = &gameServer{paxosrpc.Node{id, hostport}, 0}
 		cs.gameServers[id] = gs
 		cs.hostPortToGameServer[hostport] = gs
 	} else {
-		id = gs.info.NodeID
+		id = gs.info.ID
 	}
 
 	// Check if all the game servers in the ring have registered. If they
@@ -110,7 +120,7 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 		reply.GameServerID = id
 		// Check if the game servers sliced has been cached. If it hasn't, make it.
 		if cs.gameServersSlice == nil {
-			cs.gameServersSlice = make([]centralrpc.Node, len(cs.gameServers))
+			cs.gameServersSlice = make([]paxosrpc.Node, len(cs.gameServers))
 			i := 0
 			for _, node := range cs.gameServers {
 				cs.gameServersSlice[i] = node.info
@@ -119,6 +129,8 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 		}
 		reply.Servers = cs.gameServersSlice
 	}
+
+	fmt.Printf("Received registration request from %d, reply was %d\n", id, reply.Status)
 
 	cs.gameServersLock.Unlock()
 
@@ -163,7 +175,7 @@ func (cs *centralServer) getGameServerIDMinClients() uint32 {
 	for _, gs := range cs.gameServers {
 		if gs.clientCount < min {
 			min = gs.clientCount
-			resultID = gs.info.NodeID
+			resultID = gs.info.ID
 		}
 	}
 	return resultID

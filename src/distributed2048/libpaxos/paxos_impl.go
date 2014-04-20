@@ -1,9 +1,11 @@
 package libpaxos
 
 import (
-	"distributed2048/gameserver"
 	"distributed2048/rpc/paxosrpc"
 	"errors"
+	"fmt"
+	"net"
+	"net/http"
 	"net/rpc"
 	"sync"
 )
@@ -12,7 +14,7 @@ type libpaxos struct {
 	allNodes       []paxosrpc.Node
 	majorityCount  int
 	nodeInfo       paxosrpc.Node
-	decidedHandler func([]gameserver.Move) error
+	decidedHandler func([]paxosrpc.Move) error
 
 	nodesMutex sync.Mutex
 	nodes      map[uint32]*node
@@ -40,7 +42,14 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 		lp.nodes[node.ID] = NewNode(node)
 	}
 
+	// Start the RPC handlers
 	rpc.RegisterName("PaxosNode", paxosrpc.Wrap(lp))
+	rpc.HandleHTTP()
+	l, err := net.Listen("tcp", fmt.Sprintf(hostport))
+	if err != nil {
+		return nil, err
+	}
+	go http.Serve(l, nil)
 
 	return lp, nil
 }
@@ -72,7 +81,7 @@ func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxos
 	return errors.New("Not implemented yet")
 }
 
-func (lp *libpaxos) Propose(moves []gameserver.Move) error {
+func (lp *libpaxos) Propose(moves []paxosrpc.Move) error {
 	done := false
 	for !done {
 		// PHASE 1
@@ -121,6 +130,6 @@ func (lp *libpaxos) Propose(moves []gameserver.Move) error {
 	return nil
 }
 
-// func (lp *libpaxos) DecidedHandler(handler func([]gameserver.Move) error) {
+// func (lp *libpaxos) DecidedHandler(handler func([]paxosrpc.Move) error) {
 // 	lp.decidedHandler = handler
 // }

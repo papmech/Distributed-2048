@@ -50,7 +50,7 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 
 	// Serve up information for the game client
 	http.HandleFunc("/", cs.gameClientViewHandler)
-	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	// go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	rpc.RegisterName("CentralServer", centralrpc.Wrap(cs))
 	rpc.HandleHTTP()

@@ -37,6 +37,7 @@ type centralServer struct {
 }
 
 func NewCentralServer(port, numGameServers int) (CentralServer, error) {
+	LOGV.Println("New Central Server is starting up")
 	if numGameServers < 1 {
 		return nil, errors.New("numGameServers must be at least 1")
 	}
@@ -48,7 +49,32 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 	}
 
 	// Serve up information for the game client
-	http.HandleFunc("/client/", cs.gameClientViewHandler)
+	http.HandleFunc("/client/", func(w http.ResponseWriter, r *http.Request) {
+		LOGV.Println("a new request was made")
+		reply := HttpReply{}
+		cs.gameServersLock.Lock()
+		if len(cs.gameServers) < cs.numGameServers {
+			// Not all game servers have connected to the ring, so reply with NotReady
+			reply.Status = "NotReady"
+		} else {
+			id := cs.getGameServerIDMinClients()
+			cs.gameServers[id].clientCount++
+			reply.Status = "OK"
+			reply.Hostport = cs.gameServers[id].info.HostPort
+		}
+		cs.gameServersLock.Unlock()
+
+		buf, err := json.Marshal(reply)
+		if err != nil {
+			//		http.Error(w, fmt.Sprintln(err), 500)
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Connection", "Keep-Alive")
+			_, err = w.Write(buf)
+			return
+		}
+		fmt.Fprintf(w, "%s", string(buf))
+	})
 
 	rpc.RegisterName("CentralServer", centralrpc.Wrap(cs))
 	rpc.HandleHTTP()
@@ -128,27 +154,7 @@ type HttpReply struct {
 	Hostport string
 }
 
-func (cs *centralServer) gameClientViewHandler(w http.ResponseWriter, r *http.Request) {
-	reply := HttpReply{}
-	cs.gameServersLock.Lock()
-	if len(cs.gameServers) < cs.numGameServers {
-		// Not all game servers have connected to the ring, so reply with NotReady
-		reply.Status = "NotReady"
-	} else {
-		id := cs.getGameServerIDMinClients()
-		cs.gameServers[id].clientCount++
-		reply.Status = "OK"
-		reply.Hostport = cs.gameServers[id].info.HostPort
-	}
-	cs.gameServersLock.Unlock()
-
-	buf, err := json.Marshal(reply)
-	if err != nil {
-		http.Error(w, fmt.Sprintln(err), 500)
-		return
-	}
-	fmt.Fprintf(w, "%s", string(buf))
-}
+//func (cs *centralServer) gameClientViewHandler(w http.ResponseWriter, r *http.Request)
 
 func (cs *centralServer) getGameServerIDMinClients() uint32 {
 	// Must be called with the LOCK acquired

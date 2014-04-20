@@ -1,6 +1,7 @@
 package libpaxos
 
 import (
+	"distributed2048/gameserver"
 	"distributed2048/rpc/paxosrpc"
 )
 

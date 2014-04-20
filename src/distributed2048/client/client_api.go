@@ -7,5 +7,6 @@ import (
 )
 
 type Client interface {
-	SetGameState() ()
+
+	SetGameState() error
 }

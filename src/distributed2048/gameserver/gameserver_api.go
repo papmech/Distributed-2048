@@ -11,4 +11,5 @@ type GameServer interface {
 	AddVote()
 	SetVoteResult()
 	TestAddVote(moves []paxosrpc.Move)
+	ListenForClients()
 }

@@ -98,11 +98,11 @@ func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *pax
 
 	// TODO: Remove this
 	// Randomly simulate time out
-	doTimeout := rand.Int()%100 < 3 // 20% of the time
-	if doTimeout {
-		LOGV.Println(lp.nodeInfo.ID, "simulating 15 second interruption.")
-		time.Sleep(15 * time.Second)
-	}
+	// doTimeout := rand.Int()%100 < 3 // 20% of the time
+	// if doTimeout {
+	// 	LOGV.Println(lp.nodeInfo.ID, "simulating 15 second interruption.")
+	// 	time.Sleep(15 * time.Second)
+	// }
 
 	lp.slotBoxMutex.Lock()
 	slot := lp.slotBox.Get(args.CommandSlotNumber)
@@ -152,10 +152,12 @@ func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxos
 	LOGV.Println(lp.nodeInfo.ID, "received decide", args.Proposal.Number, "for slot", args.Proposal.CommandSlotNumber)
 	lp.dataMutex.Lock()
 	lp.highestAcceptedProposal = nil
+
 	lp.slotBoxMutex.Lock()
 	lp.slotBox.Add(NewSlot(args.Proposal.CommandSlotNumber, args.Proposal.Value))
 	lp.slotBoxMutex.Unlock()
 	lp.triggerHandlerCallCh <- struct{}{}
+
 	lp.dataMutex.Unlock()
 	// TODO: only call the handler IF we obtain the next slot number in line
 	// lp.decidedHandler(args.Proposal.CommandSlotNumber, args.Proposal.Value)

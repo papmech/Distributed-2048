@@ -23,9 +23,9 @@ const (
 var LOGV = util.NewLogger(DEBUG_LOG, "DEBUG", os.Stdout)
 var LOGE = util.NewLogger(ERROR_LOG, "ERROR", os.Stderr)
 
-type Client struct {
+type client struct {
 	id int
-
+	conn *websocket.Conn
 }
 
 type gameServer struct {
@@ -37,12 +37,13 @@ type gameServer struct {
 
 	// Client-related stuff
 	pattern string
-	clients map[int]*Client
-	addCh     chan *Client
-	delCh     chan *Client
+	clients map[int]*client
+	addCh     chan *client
+	delCh     chan *client
 //	sendAllCh chan *Message
 	doneCh    chan bool
 	errCh     chan error
+	numClients int
 }
 
 // NewGameServer creates an instance of a Game Server. It does not return
@@ -83,9 +84,9 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
 
 	// Client related stuff
-	clients := make(map[int]*Client)
-	addCh := make(chan *Client)
-	delCh := make(chan *Client)
+	clients := make(map[int]*client)
+	addCh := make(chan *client)
+	delCh := make(chan *client)
 //	sendAllCh := make(chan *Message)
 	doneCh := make(chan bool)
 	errCh := make(chan error)
@@ -103,9 +104,8 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 //		sendAllCh,
 		doneCh,
 		errCh,
-
+		0,
 	}
-
 	go gs.ListenForClients()
 	return gs, nil
 }
@@ -126,7 +126,24 @@ func (gs *gameServer) ListenForClients() {
 
 	// websocket handler
 	onConnected := func(ws *websocket.Conn) {
-		LOGV.Print("Client has connected")
+		LOGV.Println("Client has connected")
+		// client has been connected: add the client to the list
+		client := &client(gs.numClients, ws)
+		gs.clients[gs.numClients] = client
+		gs.numClients += 1
+
+		for {
+			var in []byte
+			if err := websocket.Message.Receive(ws, &in); err != nil {
+				LOGE.Println("Error when receiving message from client")
+			}
+			fmt.Printf("Received: %s\n", string(in))
+			websocket.Message.Send(ws, in)
+		}
+//		for {
+//			LOGV.Println("I r t3h spammingz")
+//			time.Sleep(1000)
+//		}
 //		defer func() {
 //			err := ws.Close()
 //			if err != nil {
@@ -139,7 +156,6 @@ func (gs *gameServer) ListenForClients() {
 		//		client.Listen()
 	}
 	http.Handle(gs.pattern, websocket.Handler(onConnected))
-	LOGV.Println("Created handler")
 
 	for {
 		select {

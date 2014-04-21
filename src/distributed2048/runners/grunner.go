@@ -21,7 +21,7 @@ var (
 
 func main() {
 	flag.Parse()
-	_, err := gameserver.NewGameServer(*centralHostPort, *hostname, *port, "/")
+	_, err := gameserver.NewGameServer(*centralHostPort, *hostname, *port, "/abc")
 	if err != nil {
 		fmt.Println("Could not create game server.")
 		fmt.Println(err)

@@ -40,3 +40,7 @@ func RandomMove() *paxosrpc.Move {
 	}
 	return paxosrpc.NewMove(dir)
 }
+
+func CompareDir(dir1, dir2 paxosrpc.Direction) bool {
+	return dir1 > dir2
+}

@@ -1,3 +1,5 @@
+// ported from https://github.com/olafurw/ML2048
+
 package lib2048
 
 import (

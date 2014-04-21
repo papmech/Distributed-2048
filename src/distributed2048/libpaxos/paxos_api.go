@@ -7,15 +7,17 @@ import (
 type Libpaxos interface {
 	// ReceiveProposal is called by a Proposer via RPC when it wishes to
 	// propose a new value for Paxos.
-	ReceivePrepare(*paxosrpc.ReceivePrepareArgs, *paxosrpc.ReceivePrepareReply) error
+	ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *paxosrpc.ReceivePrepareReply) error
 	// ReceiveAccept is called by a Proposer via RPC when it wishes to ask all
 	// other nodes if they accept the proposed value.
-	ReceiveAccept(*paxosrpc.ReceiveAcceptArgs, *paxosrpc.ReceiveAcceptReply) error
+	ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxosrpc.ReceiveAcceptReply) error
 	// ReceiveDecide is called by a Proposer via RPC when one round of Paxos
 	// has completed, and everyone has agreed on a value.
-	ReceiveDecide(*paxosrpc.ReceiveDecideArgs, *paxosrpc.ReceiveDecideReply) error
-	// Propose will propose a new value among the other nodes. It will block
-	// until the proposal has been successfully accepted.
-	Propose([]paxosrpc.Move) error
-	// DecidedHandler(func([]gameserver.Move) error)
+	ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxosrpc.ReceiveDecideReply) error
+	// Propose will queue a new value to be proposed to the rest of the nodes.
+	// It will not block.
+	Propose(moves []paxosrpc.Move) error
+	// DecidedHandler sets the callback function that will be invoked when a
+	// Paxos round has completed and a new value has been decided upon.
+	DecidedHandler(func([]paxosrpc.Move))
 }

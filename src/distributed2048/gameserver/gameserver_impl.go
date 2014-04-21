@@ -3,9 +3,11 @@ package gameserver
 import (
 	"distributed2048/libpaxos"
 	"distributed2048/rpc/centralrpc"
+	"distributed2048/rpc/paxosrpc"
 	"distributed2048/util"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/rpc"
 	"os"
 	"time"
@@ -29,6 +31,7 @@ type client struct {
 }
 
 type gameServer struct {
+	id       uint32
 	hostname string
 	port     int
 	hostport string
@@ -74,14 +77,13 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	}
 	LOGV.Printf("GS node %d finished registration with CS\n", reply.GameServerID)
 
-	libpaxos, err := libpaxos.NewLibpaxos(reply.GameServerID, gshostport, reply.Servers)
+	newlibpaxos, err := libpaxos.NewLibpaxos(reply.GameServerID, gshostport, reply.Servers)
+
 	if err != nil {
 		LOGE.Println("Could not start libpaxos")
 		LOGE.Println(err)
 		return nil, err
 	}
-
-	LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
 
 	// Client related stuff
 	clients := make(map[int]*client)
@@ -92,10 +94,11 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	errCh := make(chan error)
 
 	gs := &gameServer{
+		reply.GameServerID,
 		hostname,
 		port,
 		gshostport,
-		libpaxos,
+		newlibpaxos,
 		pattern,
 //		messages,
 		clients,
@@ -106,8 +109,45 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		errCh,
 		0,
 	}
+	gs.libpaxos.DecidedHandler(gs.handleDecided)
+	LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
+
 	go gs.ListenForClients()
+	go gs.horseShit()
+
 	return gs, nil
+}
+
+func (gs *gameServer) horseShit() {
+	time.Sleep(3 * time.Second)
+	for {
+		if gs.id == 0 {
+			num := time.Duration(rand.Int() % 50)
+			time.Sleep(num * time.Millisecond)
+			// LOGV.Println("Horse shit starting on", gs.id)
+			moves := []paxosrpc.Move{
+				*paxosrpc.NewMove(paxosrpc.Up),
+				*paxosrpc.NewMove(paxosrpc.Up),
+			}
+			gs.libpaxos.Propose(moves)
+		} else if gs.id == 1 {
+			num := time.Duration(rand.Int() % 50)
+			time.Sleep(num * time.Millisecond)
+			// LOGV.Println("Horse shit starting on", gs.id)
+			moves := []paxosrpc.Move{
+				*paxosrpc.NewMove(paxosrpc.Down),
+				*paxosrpc.NewMove(paxosrpc.Left),
+			}
+			gs.libpaxos.Propose(moves)
+		} else {
+			select {}
+		}
+	}
+}
+
+func (gs *gameServer) handleDecided(moves []paxosrpc.Move) {
+	// LOGV.Println("Holy shit! Paxos quorum round has complete, decided moves:")
+	// LOGV.Println(util.MovesString(moves))
 }
 
 func (gs *gameServer) DoVote() {
@@ -172,4 +212,8 @@ func (gs *gameServer) ListenForClients() {
 
 		}
 	}
+}
+
+func (gs *gameServer) TestAddVote(moves []paxosrpc.Move) {
+	gs.libpaxos.Propose(moves)
 }

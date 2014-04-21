@@ -43,13 +43,15 @@ ConnectionManager.prototype.connectToGameServer = function (hostport) {
     this.connection.onerror = function() {
         console.log("error from connection with gameserver");
     }
-    this.connection.onmessage = function() {
+    this.connection.onmessage = function(e) {
          console.log("message received from gameserver");
-         var server_message = e.data;
-         console.log(e.data);
-         if (true) {
+         var data = JSON && JSON.parse(e.data) || $.parseJSON(e.data);
+         console.log(data);
+         if (!self.boardHasBeenSet) {
+            self.boardHasBeenSet = true;
             $(".load-wrapper").css( "display", "none" );
          }
+         self.emit("update", data);
     }
 };
 

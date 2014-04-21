@@ -9,7 +9,6 @@ Grid.prototype.empty = function () {
 
   for (var x = 0; x < this.size; x++) {
     var row = cells[x] = [];
-
     for (var y = 0; y < this.size; y++) {
       row.push(null);
     }
@@ -19,17 +18,26 @@ Grid.prototype.empty = function () {
 };
 
 Grid.prototype.fromState = function (state) {
+    console.log('state is ' + state);
+    console.log(state[0][1]);
   var cells = [];
 
   for (var x = 0; x < this.size; x++) {
     var row = cells[x] = [];
 
     for (var y = 0; y < this.size; y++) {
-      var tile = state[x][y];
-      row.push(tile ? new Tile(tile.position, tile.value) : null);
+      var num = state[x][y];
+      var position = {x: y, y: x};
+      var tile = null;
+      if (num !== 0) {
+        tile = new Tile(position, num);
+      }
+      row.push(tile);
+//      var tile = state[x][y];
+//      row.push(tile ? new Tile(tile.position, tile.value) : null);
     }
   }
-
+    console.log(cells);
   return cells;
 };
 

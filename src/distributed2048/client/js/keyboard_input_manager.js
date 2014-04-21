@@ -53,12 +53,7 @@ KeyboardInputManager.prototype.listen = function () {
   document.addEventListener("keydown", function (event) {
     var modifiers = event.altKey || event.ctrlKey || event.metaKey ||
                     event.shiftKey;
-
-
     // Insert code here for sending it to the go client
-
-
-
 
     var mapped    = map[event.which];
 

@@ -13,6 +13,7 @@ HTMLActuator.prototype.actuate = function (grid, metadata) {
   window.requestAnimationFrame(function () {
     self.clearContainer(self.tileContainer);
 
+    console.log("actuating");
     grid.cells.forEach(function (column) {
       column.forEach(function (cell) {
         if (cell) {
@@ -31,7 +32,6 @@ HTMLActuator.prototype.actuate = function (grid, metadata) {
         self.message(true); // You win!
       }
     }
-
   });
 };
 

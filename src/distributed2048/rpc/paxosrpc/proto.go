@@ -13,8 +13,8 @@ const (
 )
 
 type ReceivePrepareArgs struct {
-	Node     Node
-	Proposal Proposal
+	Node           Node
+	ProposalNumber ProposalNumber
 }
 
 type ReceivePrepareReply struct {

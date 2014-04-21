@@ -7,6 +7,7 @@ import (
 
 type Direction int
 
+const layout = "15:04:05.12"
 const (
 	Up Direction = iota + 1
 	Left
@@ -36,5 +37,5 @@ func (m *Move) String() string {
 		moveString = "Right"
 	}
 
-	return fmt.Sprintf("'%s': %s", m.Time, moveString)
+	return fmt.Sprintf("'%s': %s", m.Time.Format(layout), moveString)
 }

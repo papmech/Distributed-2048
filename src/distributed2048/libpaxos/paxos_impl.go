@@ -5,11 +5,13 @@ import (
 	"distributed2048/rpc/paxosrpc"
 	"distributed2048/util"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 )
 
 const (
@@ -29,17 +31,17 @@ type libpaxos struct {
 	nodesMutex sync.Mutex
 	nodes      map[uint32]*node
 
-	acceptedProposalsMutex sync.Mutex
-	acceptedProposals      []*paxosrpc.Proposal
+	// acceptedProposalsMutex sync.Mutex
+	// acceptedProposals      []*paxosrpc.Proposal
 
 	globalMutex               sync.Mutex
 	highestProposalNumberSeen *paxosrpc.ProposalNumber
 	highestAcceptedProposal   *paxosrpc.Proposal
 	currentProposal           *paxosrpc.Proposal
 
-	decidedCh    chan *paxosrpc.Proposal
-	newValueCh   chan []paxosrpc.Move
-	doProposalCh chan *paxosrpc.Proposal
+	decidedCh  chan *paxosrpc.Proposal
+	newValueCh chan []paxosrpc.Move
+	// doProposalCh chan *paxosrpc.Proposal
 
 	newValuesQueue     *list.List
 	newValuesQueueLock sync.Mutex
@@ -47,10 +49,15 @@ type libpaxos struct {
 
 func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libpaxos, error) {
 	lp := &libpaxos{
-		allNodes:      allNodes,
-		majorityCount: len(allNodes)/2 + 1,
-		nodeInfo:      paxosrpc.Node{nodeID, hostport},
-		nodes:         make(map[uint32]*node),
+		allNodes:                  allNodes,
+		majorityCount:             len(allNodes)/2 + 1,
+		nodeInfo:                  paxosrpc.Node{nodeID, hostport},
+		nodes:                     make(map[uint32]*node),
+		decidedCh:                 make(chan *paxosrpc.Proposal),
+		newValueCh:                make(chan []paxosrpc.Move),
+		highestProposalNumberSeen: &paxosrpc.ProposalNumber{0, nodeID},
+		newValuesQueue:            list.New(),
+		// doProposalCh:  make(chan *paxosrpc.Proposal),
 	}
 
 	for _, node := range allNodes {
@@ -66,17 +73,21 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 	}
 	go http.Serve(l, nil)
 
+	go lp.controller()
+
 	return lp, nil
 }
 
 func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *paxosrpc.ReceivePrepareReply) error {
+	// LOGV.Println(lp.nodeInfo.ID, "received prepare", args.ProposalNumber)
 	lp.globalMutex.Lock()
 
-	if lp.highestProposalNumberSeen != nil && args.Proposal.Number.LessThan(lp.highestProposalNumberSeen) {
+	if lp.highestProposalNumberSeen != nil && args.ProposalNumber.LessThan(lp.highestProposalNumberSeen) {
+		LOGV.Println(lp.nodeInfo.ID, "rejected prepare", args.ProposalNumber)
 		reply.Status = paxosrpc.Reject
-		// reply.HighestProposalNumber = lp.highestProposalNumberSeen
 	} else {
-		lp.highestProposalNumberSeen = &args.Proposal.Number
+		LOGV.Println(lp.nodeInfo.ID, "accepted prepare", args.ProposalNumber)
+		lp.highestProposalNumberSeen = &args.ProposalNumber
 		reply.Status = paxosrpc.OK
 		if lp.highestAcceptedProposal != nil {
 			reply.HasAcceptedProposal = true
@@ -84,16 +95,6 @@ func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *pax
 		} else {
 			reply.HasAcceptedProposal = false
 		}
-
-		// reply.Status = paxosrpc.Accept
-		// if args.Proposal.Number.GreaterThan(lp.highestProposalNumberSeen) {
-		// 	lp.highestProposalNumberSeen = args.Proposal.Number
-		// 	lp.highestProposal = args.Proposal
-		// } else {
-		// 	// They have equal numbers
-
-		// }
-		// reply.HighestProposal = lp.highestProposal
 	}
 
 	lp.globalMutex.Unlock()
@@ -101,11 +102,14 @@ func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *pax
 }
 
 func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxosrpc.ReceiveAcceptReply) error {
+	// LOGV.Println(lp.nodeInfo.ID, "received accept", args.Proposal.Number)
 	lp.globalMutex.Lock()
 
 	if lp.highestAcceptedProposal != nil && args.Proposal.Number.LessThan(&lp.highestAcceptedProposal.Number) {
+		LOGV.Println(lp.nodeInfo.ID, "rejected accept", args.Proposal.Number)
 		reply.Status = paxosrpc.Reject
 	} else {
+		LOGV.Println(lp.nodeInfo.ID, "accepted accept", args.Proposal.Number)
 		lp.highestAcceptedProposal = &args.Proposal
 		lp.highestProposalNumberSeen = &args.Proposal.Number
 		reply.Status = paxosrpc.OK
@@ -116,6 +120,7 @@ func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxos
 }
 
 func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxosrpc.ReceiveDecideReply) error {
+	LOGV.Println(lp.nodeInfo.ID, "received decide", args.Proposal.Number)
 	lp.globalMutex.Lock()
 	lp.highestAcceptedProposal = nil
 	lp.globalMutex.Unlock()
@@ -139,7 +144,7 @@ func (lp *libpaxos) controller() {
 	for {
 		select {
 		case moves := <-lp.newValueCh:
-			LOGV.Println("Controller received moves", moves)
+			// LOGV.Println("Controller received moves", util.MovesString(moves))
 			if proposalInProgress {
 				lp.newValuesQueueLock.Lock()
 				lp.newValuesQueue.PushBack(moves)
@@ -168,23 +173,31 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 	done := false
 	for !done {
 		// PHASE 1
+		LOGV.Println("Proposer", lp.nodeInfo.ID, ": PHASE 1")
+		// LOGV.Println("Proposing", util.MovesString(moves))
 
 		lp.globalMutex.Lock()
 		// Make a new proposal such that my_n > n_h
 		myProp := paxosrpc.NewProposal(lp.highestProposalNumberSeen.Number+1, lp.nodeInfo.ID, moves)
+		lp.highestProposalNumberSeen = &myProp.Number
 		// lp.currentProposal = myProp // TODO: Need this?
 		lp.globalMutex.Unlock()
 
 		// Send proposal to everybody
 		promisedCount := 1
+		var otherProposal *paxosrpc.Proposal
 		lp.nodesMutex.Lock()
 		for _, node := range lp.nodes {
+			if node.Info.ID == lp.nodeInfo.ID {
+				continue // skip myself
+			}
+
 			client := node.getRPCClient()
 			if client == nil {
 				continue
 			}
 
-			args := &paxosrpc.ReceivePrepareArgs{lp.nodeInfo, *myProp}
+			args := &paxosrpc.ReceivePrepareArgs{lp.nodeInfo, myProp.Number}
 			var reply paxosrpc.ReceivePrepareReply
 			err := client.Call("PaxosNode.ReceivePrepare", args, &reply)
 			if err != nil {
@@ -195,8 +208,8 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 			lp.globalMutex.Lock()
 			if reply.Status == paxosrpc.OK {
 				if reply.HasAcceptedProposal {
-					if lp.highestAcceptedProposal == nil || reply.AcceptedProposal.Number.GreaterThan(&lp.highestAcceptedProposal.Number) {
-						lp.highestAcceptedProposal = &reply.AcceptedProposal
+					if otherProposal == nil || reply.AcceptedProposal.Number.GreaterThan(&otherProposal.Number) {
+						otherProposal = &reply.AcceptedProposal
 					}
 				}
 				promisedCount++
@@ -209,23 +222,30 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 
 		// Got majority?
 		if promisedCount < lp.majorityCount {
-			// TODO: do I nil-out the lp.highestAcceptedProposal etc?
-			// TODO: add backoff
+			LOGV.Println(lp.nodeInfo.ID, " couldn't get a majority. Got", promisedCount, "needed", lp.majorityCount)
+			// Backoff
+			num := time.Duration(rand.Int()%100 + 25)
+			time.Sleep(num * time.Millisecond)
 			continue // try again
 		}
 
-		// PHASE 2
-		lp.globalMutex.Lock()
-		propToAccept := lp.highestAcceptedProposal
-		if propToAccept == nil {
+		propToAccept := otherProposal
+		if otherProposal == nil {
 			propToAccept = myProp
 		}
-		lp.globalMutex.Unlock()
+		LOGV.Println(lp.nodeInfo.ID, "got a majority on", propToAccept.Number.String())
+
+		// PHASE 2
+		LOGV.Println("Proposer", lp.nodeInfo.ID, ": PHASE 2")
 
 		// Send <accept, myn, V> to all nodes
 		acceptedCount := 1
 		lp.nodesMutex.Lock()
 		for _, node := range lp.nodes {
+			if node.Info.ID == lp.nodeInfo.ID {
+				continue // skip myself
+			}
+
 			client := node.getRPCClient()
 			if client == nil {
 				continue
@@ -256,6 +276,10 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 		// Send <decide, va> to all nodes
 		lp.nodesMutex.Lock()
 		for _, node := range lp.nodes {
+			if node.Info.ID == lp.nodeInfo.ID {
+				continue // skip myself
+			}
+
 			client := node.getRPCClient()
 			if client == nil {
 				continue

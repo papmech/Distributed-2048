@@ -13,6 +13,7 @@ function KeyboardInputManager() {
   }
 
   this.listen();
+  this.moveStack = ;
 }
 
 KeyboardInputManager.prototype.on = function (event, callback) {

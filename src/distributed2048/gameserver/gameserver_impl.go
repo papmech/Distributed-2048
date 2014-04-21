@@ -84,31 +84,32 @@ func NewGameServer(centralServerHostPort, hostname string, port int) (GameServer
 func (gs *gameServer) horseShit() {
 	time.Sleep(3 * time.Second)
 	for {
-		if gs.id == 0 {
-			num := time.Duration(rand.Int() % 50)
-			time.Sleep(num * time.Millisecond)
-			// LOGV.Println("Horse shit starting on", gs.id)
-			moves := []paxosrpc.Move{
-				*paxosrpc.NewMove(paxosrpc.Up),
-				*paxosrpc.NewMove(paxosrpc.Up),
-			}
-			gs.libpaxos.Propose(moves)
-		} else if gs.id == 1 {
-			num := time.Duration(rand.Int() % 50)
-			time.Sleep(num * time.Millisecond)
-			// LOGV.Println("Horse shit starting on", gs.id)
-			moves := []paxosrpc.Move{
-				*paxosrpc.NewMove(paxosrpc.Down),
-				*paxosrpc.NewMove(paxosrpc.Left),
-			}
-			gs.libpaxos.Propose(moves)
-		} else {
-			select {}
+		// if gs.id == 0 {
+		num := time.Duration(rand.Int() % 50)
+		time.Sleep(num * time.Millisecond)
+		// LOGV.Println("Horse shit starting on", gs.id)
+		moves := []paxosrpc.Move{
+			*paxosrpc.NewMove(paxosrpc.Up),
+			*paxosrpc.NewMove(paxosrpc.Up),
 		}
+		gs.libpaxos.Propose(moves)
+		// } else if gs.id == 1 {
+		// 	num := time.Duration(rand.Int() % 50)
+		// 	time.Sleep(num * time.Millisecond)
+		// 	// LOGV.Println("Horse shit starting on", gs.id)
+		// 	moves := []paxosrpc.Move{
+		// 		*paxosrpc.NewMove(paxosrpc.Down),
+		// 		*paxosrpc.NewMove(paxosrpc.Left),
+		// 	}
+		// 	gs.libpaxos.Propose(moves)
+		// } else {
+		// 	select {}
+		// }
 	}
 }
 
-func (gs *gameServer) handleDecided(moves []paxosrpc.Move) {
+func (gs *gameServer) handleDecided(slotNumber uint32, moves []paxosrpc.Move) {
+	LOGV.Println("GAME SERVER", gs.id, "got slot", slotNumber)
 	// LOGV.Println("Holy shit! Paxos quorum round has complete, decided moves:")
 	// LOGV.Println(util.MovesString(moves))
 }

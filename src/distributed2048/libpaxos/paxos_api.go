@@ -19,5 +19,5 @@ type Libpaxos interface {
 	Propose(moves []paxosrpc.Move) error
 	// DecidedHandler sets the callback function that will be invoked when a
 	// Paxos round has completed and a new value has been decided upon.
-	DecidedHandler(func([]paxosrpc.Move))
+	DecidedHandler(handler func(slotNumber uint32, moves []paxosrpc.Move))
 }

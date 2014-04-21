@@ -26,13 +26,15 @@ func (a *ProposalNumber) String() string {
 }
 
 type Proposal struct {
-	Number ProposalNumber
-	Value  []Move
+	Number            ProposalNumber
+	CommandSlotNumber uint32
+	Value             []Move
 }
 
-func NewProposal(number, nodeID uint32, moves []Move) *Proposal {
+func NewProposal(number, commandSlotNumber, nodeID uint32, moves []Move) *Proposal {
 	return &Proposal{
 		ProposalNumber{number, nodeID},
+		commandSlotNumber,
 		moves,
 	}
 }

@@ -6,19 +6,20 @@ function GameManager(size, InputManager, Actuator, StorageManager, ConnManager) 
   this.connManager = new ConnManager;
 
   this.startTiles     = 2;
-
+    // We want this to "not actually" touch the game state
   this.inputManager.on("move", this.move.bind(this));
+
   this.inputManager.on("restart", this.restart.bind(this));
   this.inputManager.on("keepPlaying", this.keepPlaying.bind(this));
 
   this.connManager.on("connectionMade", this.setup.bind(this));
-//  $.get("http://localhost:15340", this.connManager.getConnectionFromCServ);
+  this.connManager.on("update", this.update.bind(this));
+
   var xmlHttp = null;
   xmlHttp = new XMLHttpRequest();
-  xmlHttp.open( "GET", "http://localhost:15340", false );
+  xmlHttp.open( "GET", "http://128.237.201.5:25340", false );
   xmlHttp.send( null );
   this.connManager.getConnectionFromCServ(xmlHttp.responseText, null)
-//  this.setup();
 }
 
 // Restart the game
@@ -44,26 +45,12 @@ GameManager.prototype.isGameTerminated = function () {
 // I think we don't need a storage manager lol
 GameManager.prototype.setup = function () {
     console.log('setting up the game');
-//  var previousState = this.storageManager.getGameState();
-
-  // Reload the game from a previous game if present
-//  if (previousState) {
-//    this.grid        = new Grid(previousState.grid.size,
-//                                previousState.grid.cells); // Reload grid
-//    this.score       = previousState.score;
-//    this.over        = previousState.over;
-//    this.won         = previousState.won;
-//    this.keepPlaying = previousState.keepPlaying;
-//  } else {
     this.grid        = new Grid(this.size);
     this.score       = 0;
     this.over        = false;
     this.won         = false;
     this.keepPlaying = false;
-//
-//    // Add the initial tiles
-//    this.addStartTiles();
-//  }
+    this.bestScore   = 0;
 
   // Update the actuator
   this.actuate();
@@ -76,37 +63,16 @@ GameManager.prototype.addStartTiles = function () {
   }
 };
 
-// Adds a tile in a random position
-GameManager.prototype.addRandomTile = function () {
-  if (this.grid.cellsAvailable()) {
-    var value = Math.random() < 0.9 ? 2 : 4;
-    var tile = new Tile(this.grid.randomAvailableCell(), value);
-
-    this.grid.insertTile(tile);
-  }
-};
-
 // Sends the updated grid to the actuator
 GameManager.prototype.actuate = function () {
-  if (this.storageManager.getBestScore() < this.score) {
-    this.storageManager.setBestScore(this.score);
-  }
-
-  // Clear the state when the game is over (game over only, not win)
-  if (this.over) {
-    this.storageManager.clearGameState();
-  } else {
-    this.storageManager.setGameState(this.serialize());
-  }
-
   this.actuator.actuate(this.grid, {
     score:      this.score,
     over:       this.over,
     won:        this.won,
-    bestScore:  this.storageManager.getBestScore(),
-    terminated: this.isGameTerminated()
+    bestScore:  this.bestScore,
+    terminated: false,
   });
-
+    console.log("GameManager done actuating");
 };
 
 // Represent the current game as an object
@@ -137,68 +103,38 @@ GameManager.prototype.moveTile = function (tile, cell) {
   tile.updatePosition(cell);
 };
 
-// Move tiles on the grid in the specified direction
-GameManager.prototype.move = function (direction) {
-  // 0: up, 1: right, 2: down, 3: left
-  var self = this;
+GameManager.prototype.move = function (dir) {
+    console.log("direction of proposed move is" + dir);
+    var message = {Direction: dir};
+    console.log("sending move: " + dir);
+    this.connManager.connection.send(JSON.stringify(message));
+};
 
-  if (this.isGameTerminated()) return; // Don't do anything if the game's over
-
-  var cell, tile;
-
-  var vector     = this.getVector(direction);
-  var traversals = this.buildTraversals(vector);
-  var moved      = false;
-
-  // Save the current tile positions and remove merger information
-  this.prepareTiles();
-
-  // Traverse the grid in the right direction and move tiles
-  traversals.x.forEach(function (x) {
-    traversals.y.forEach(function (y) {
-      cell = { x: x, y: y };
-      tile = self.grid.cellContent(cell);
-
-      if (tile) {
-        var positions = self.findFarthestPosition(cell, vector);
-        var next      = self.grid.cellContent(positions.next);
-
-        // Only one merger per row traversal?
-        if (next && next.value === tile.value && !next.mergedFrom) {
-          var merged = new Tile(positions.next, tile.value * 2);
-          merged.mergedFrom = [tile, next];
-
-          self.grid.insertTile(merged);
-          self.grid.removeTile(tile);
-
-          // Converge the two tiles' positions
-          tile.updatePosition(positions.next);
-
-          // Update the score
-          self.score += merged.value;
-
-          // The mighty 2048 tile
-          if (merged.value === 2048) self.won = true;
-        } else {
-          self.moveTile(tile, positions.farthest);
-        }
-
-        if (!self.positionsEqual(cell, tile)) {
-          moved = true; // The tile moved from its original cell!
-        }
-      }
-    });
-  });
-
-  if (moved) {
-    this.addRandomTile();
-
-    if (!this.movesAvailable()) {
-      this.over = true; // Game over!
+GameManager.prototype.update = function (data) {
+    console.log("updating");
+    this.score = data.Score;
+    this.grid.cells = this.grid.fromState(data.Grid);
+    if (this.score > this.bestScore) {
+        this.bestScore = this.score;
     }
-
+    if (data.Won) {
+        console.log("won game");
+        this.won = true;
+        this.grid = data.Grid;
+        // We actuate this and then automatically restart
+        this.actuate();
+        this.grid = new Grid(this.size);
+        this.won = false;
+        this.over = false;
+        this.score = 0;
+    } else if (data.Over) {
+        console.log("lost game");
+        this.over = true;
+        this.actuate();
+    }
+    console.log(this.grid);
     this.actuate();
-  }
+    return;
 };
 
 // Get the vector representing the chosen direction

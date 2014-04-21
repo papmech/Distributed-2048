@@ -51,8 +51,9 @@ func NewCentralServer(port, numGameServers int) (CentralServer, error) {
 	}
 
 	// Serve up information for the game client
+
 	http.HandleFunc("/", cs.gameClientViewHandler)
-	// go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	go http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 
 	rpc.RegisterName("CentralServer", centralrpc.Wrap(cs))
 	rpc.HandleHTTP()
@@ -148,9 +149,11 @@ func (cs *centralServer) gameClientViewHandler(w http.ResponseWriter, r *http.Re
 	cs.gameServersLock.Lock()
 	if len(cs.gameServers) < cs.numGameServers {
 		// Not all game servers have connected to the ring, so reply with NotReady
+		LOGV.Println("Not all game servers have connected - replying not ready...")
 		reply.Status = "NotReady"
 		reply.Hostport = ""
 	} else {
+		LOGV.Println("Games servers have connected - replying with OK")
 		id := cs.getGameServerIDMinClients()
 		cs.gameServers[id].clientCount++
 		reply.Status = "OK"

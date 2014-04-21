@@ -1,9 +1,9 @@
-function GameManager(size, InputManager, Actuator, StorageManager, ConnectionManager) {
+function GameManager(size, InputManager, Actuator, StorageManager, ConnManager) {
   this.size           = size; // Size of the grid
   this.inputManager   = new InputManager;
   this.storageManager = new StorageManager;
   this.actuator       = new Actuator;
-  this.connectionManager = new ConnectionManager;
+  this.connManager = new ConnManager;
 
   this.startTiles     = 2;
 
@@ -11,7 +11,14 @@ function GameManager(size, InputManager, Actuator, StorageManager, ConnectionMan
   this.inputManager.on("restart", this.restart.bind(this));
   this.inputManager.on("keepPlaying", this.keepPlaying.bind(this));
 
-  this.setup();
+  this.connManager.on("connectionMade", this.setup.bind(this));
+//  $.get("http://localhost:15340", this.connManager.getConnectionFromCServ);
+  var xmlHttp = null;
+  xmlHttp = new XMLHttpRequest();
+  xmlHttp.open( "GET", "http://localhost:15340", false );
+  xmlHttp.send( null );
+  this.connManager.getConnectionFromCServ(xmlHttp.responseText, null)
+//  this.setup();
 }
 
 // Restart the game
@@ -36,6 +43,7 @@ GameManager.prototype.isGameTerminated = function () {
 // Set up the game
 // I think we don't need a storage manager lol
 GameManager.prototype.setup = function () {
+    console.log('setting up the game');
 //  var previousState = this.storageManager.getGameState();
 
   // Reload the game from a previous game if present
@@ -52,9 +60,9 @@ GameManager.prototype.setup = function () {
     this.over        = false;
     this.won         = false;
     this.keepPlaying = false;
-
-    // Add the initial tiles
-    this.addStartTiles();
+//
+//    // Add the initial tiles
+//    this.addStartTiles();
 //  }
 
   // Update the actuator

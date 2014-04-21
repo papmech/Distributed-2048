@@ -8,11 +8,13 @@ fi
 # Commands
 CENTRAL_SERVER="go run cservrunner.go"
 GAME_SERVER="go run grunner.go"
+CLIENT_SERVER="go run crunner.go"
 CENTRAL_PORT=15340
 NUM_GAME_SERVERS=$1
 
 echo "SCRIPT STARTING CENTRAL SERVER ON PORT ${CENTRAL_PORT}"
 ${CENTRAL_SERVER} -port=${CENTRAL_PORT} -gameservers=${NUM_GAME_SERVERS} &
+${CLIENT_SERVER} &
 sleep 2
 
 for (( i=0; i < $NUM_GAME_SERVERS; i++))

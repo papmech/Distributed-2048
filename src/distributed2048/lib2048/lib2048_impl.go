@@ -8,20 +8,22 @@ import (
 	"math/rand"
 )
 
+var r = rand.New(rand.NewSource(15440))
+
 type game struct {
 	grid    [BoardLen][BoardLen]int
 	score   int
 	history []paxosrpc.Direction
 }
 
-func NewGame2048() (Game2048, error) {
+func NewGame2048() Game2048 {
 	g := &game{
 		score:   0,
 		history: make([]paxosrpc.Direction, 0),
 	}
 	g.reset()
 	g.newRound(InitialTileCount)
-	return g, nil
+	return g
 }
 
 func (g *game) MakeMove(dir paxosrpc.Direction) {
@@ -382,9 +384,9 @@ func (g *game) randomEmptyPos() (int, int) {
 }
 
 func randPos() int {
-	return rand.Int() % BoardLen
+	return r.Int() % BoardLen
 }
 
 func shouldInitialValueBeDouble() bool {
-	return rand.Int()%100 < InitialTileDoublePercent
+	return r.Int()%100 < InitialTileDoublePercent
 }

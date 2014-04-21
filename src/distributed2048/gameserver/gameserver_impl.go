@@ -1,6 +1,7 @@
 package gameserver
 
 import (
+	"code.google.com/p/go.net/websocket"
 	"distributed2048/libpaxos"
 	"distributed2048/rpc/centralrpc"
 	"distributed2048/rpc/paxosrpc"
@@ -8,11 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"net/rpc"
 	"os"
 	"time"
-	"net/http"
-	"code.google.com/p/go.net/websocket"
 )
 
 const (
@@ -26,7 +26,7 @@ var LOGV = util.NewLogger(DEBUG_LOG, "DEBUG", os.Stdout)
 var LOGE = util.NewLogger(ERROR_LOG, "ERROR", os.Stderr)
 
 type client struct {
-	id int
+	id   int
 	conn *websocket.Conn
 }
 
@@ -41,11 +41,11 @@ type gameServer struct {
 	// Client-related stuff
 	pattern string
 	clients map[int]*client
-	addCh     chan *client
-	delCh     chan *client
-//	sendAllCh chan *Message
-	doneCh    chan bool
-	errCh     chan error
+	addCh   chan *client
+	delCh   chan *client
+	//	sendAllCh chan *Message
+	doneCh     chan bool
+	errCh      chan error
 	numClients int
 }
 
@@ -53,7 +53,7 @@ type gameServer struct {
 // until it has successfully joined the cluster of game servers.
 func NewGameServer(centralServerHostPort, hostname string, port int, pattern string) (GameServer, error) {
 	// Register with the central server
-	client, err := rpc.DialHTTP("tcp", centralServerHostPort)
+	c, err := rpc.DialHTTP("tcp", centralServerHostPort)
 	if err != nil {
 		LOGE.Println("Could not connect to central server host port via RPC")
 		LOGE.Println(err)
@@ -64,7 +64,7 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	var reply centralrpc.RegisterGameServerReply
 	reply.Status = centralrpc.NotReady
 	for reply.Status != centralrpc.OK {
-		err = client.Call("CentralServer.RegisterGameServer", args, &reply)
+		err = c.Call("CentralServer.RegisterGameServer", args, &reply)
 		if err != nil {
 			LOGE.Println("Could not RPC call method CentralServer.RegisterGameServer")
 			LOGE.Println(err)
@@ -89,7 +89,7 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	clients := make(map[int]*client)
 	addCh := make(chan *client)
 	delCh := make(chan *client)
-//	sendAllCh := make(chan *Message)
+	//	sendAllCh := make(chan *Message)
 	doneCh := make(chan bool)
 	errCh := make(chan error)
 
@@ -100,11 +100,11 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		gshostport,
 		newlibpaxos,
 		pattern,
-//		messages,
+		//		messages,
 		clients,
 		addCh,
 		delCh,
-//		sendAllCh,
+		//		sendAllCh,
 		doneCh,
 		errCh,
 		0,
@@ -118,37 +118,26 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	return gs, nil
 }
 
+// TODO: Remove this horseShit exists purely to test Paxos. At random
+// intervals, it generates a random number of moves to be sent via Paxos.
 func (gs *gameServer) horseShit() {
 	time.Sleep(3 * time.Second)
+	minMoves, maxMoves := 5, 20
+	minSleep, maxSleep := 0, 50
+
 	for {
-		// if gs.id == 0 {
-		num := time.Duration(rand.Int() % 50)
-		time.Sleep(num * time.Millisecond)
-		// LOGV.Println("Horse shit starting on", gs.id)
-		moves := []paxosrpc.Move{
-			*paxosrpc.NewMove(paxosrpc.Up),
-			*paxosrpc.NewMove(paxosrpc.Up),
+		time.Sleep(time.Duration(rand.Intn(maxSleep-minSleep)+minSleep) * time.Millisecond)
+		moves := make([]paxosrpc.Move, 0)
+		numMoves := rand.Intn(maxMoves - minMoves)
+		for i := 0; i < numMoves; i++ {
+			moves = append(moves, *util.RandomMove())
 		}
 		gs.libpaxos.Propose(moves)
-		// } else if gs.id == 1 {
-		// 	num := time.Duration(rand.Int() % 50)
-		// 	time.Sleep(num * time.Millisecond)
-		// 	// LOGV.Println("Horse shit starting on", gs.id)
-		// 	moves := []paxosrpc.Move{
-		// 		*paxosrpc.NewMove(paxosrpc.Down),
-		// 		*paxosrpc.NewMove(paxosrpc.Left),
-		// 	}
-		// 	gs.libpaxos.Propose(moves)
-		// } else {
-		// 	select {}
-		// }
 	}
 }
 
 func (gs *gameServer) handleDecided(slotNumber uint32, moves []paxosrpc.Move) {
 	LOGV.Println("GAME SERVER", gs.id, "got slot", slotNumber)
-	// LOGV.Println("Holy shit! Paxos quorum round has complete, decided moves:")
-	// LOGV.Println(util.MovesString(moves))
 }
 
 func (gs *gameServer) DoVote() {
@@ -169,8 +158,8 @@ func (gs *gameServer) ListenForClients() {
 	onConnected := func(ws *websocket.Conn) {
 		LOGV.Println("Client has connected")
 		// client has been connected: add the client to the list
-		client := &client(gs.numClients, ws)
-		gs.clients[gs.numClients] = client
+		c := &client{gs.numClients, ws}
+		gs.clients[gs.numClients] = c
 		gs.numClients += 1
 
 		for {
@@ -181,35 +170,35 @@ func (gs *gameServer) ListenForClients() {
 			fmt.Printf("Received: %s\n", string(in))
 			websocket.Message.Send(ws, in)
 		}
-//		for {
-//			LOGV.Println("I r t3h spammingz")
-//			time.Sleep(1000)
-//		}
-//		defer func() {
-//			err := ws.Close()
-//			if err != nil {
-//				gs.errCh <- err
-//			}
-//		}()
+		//		for {
+		//			LOGV.Println("I r t3h spammingz")
+		//			time.Sleep(1000)
+		//		}
+		//		defer func() {
+		//			err := ws.Close()
+		//			if err != nil {
+		//				gs.errCh <- err
+		//			}
+		//		}()
 
 		//		client := NewClient(ws, s)
-	//		s.Add(client)
+		//		s.Add(client)
 		//		client.Listen()
 	}
 	http.Handle(gs.pattern, websocket.Handler(onConnected))
 
 	for {
 		select {
-			// Add a new client
-//		case c := <-gs.addCh:
-//			LOGV.Println("added new client")
+		// Add a new client
+		//		case c := <-gs.addCh:
+		//			LOGV.Println("added new client")
 
-			// Delete a client
-//		case c := <-gs.delCh:
-			// Broadcast a message to all clients
-//		case msg := <-gs.sendAllCh:
-			// Error channel
-//		case err := <-gs.errCh:
+		// Delete a client
+		//		case c := <-gs.delCh:
+		// Broadcast a message to all clients
+		//		case msg := <-gs.sendAllCh:
+		// Error channel
+		//		case err := <-gs.errCh:
 
 		}
 	}

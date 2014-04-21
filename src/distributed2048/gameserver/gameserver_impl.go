@@ -3,6 +3,7 @@ package gameserver
 import (
 	"distributed2048/libpaxos"
 	"distributed2048/rpc/centralrpc"
+	"distributed2048/rpc/paxosrpc"
 	"distributed2048/util"
 	"errors"
 	"fmt"
@@ -68,10 +69,16 @@ func NewGameServer(centralServerHostPort, hostname string, port int) (GameServer
 		LOGE.Println(err)
 		return nil, err
 	}
+	gs.libpaxos.DecidedHandler(gs.handleDecided)
 
 	LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
 
 	return gs, nil
+}
+
+func (gs *gameServer) handleDecided(moves []paxosrpc.Move) {
+	LOGV.Println("Holy shit! Paxos quorum round has complete, decided moves:")
+	LOGV.Println(moves)
 }
 
 func (gs *gameServer) DoVote() {
@@ -84,4 +91,8 @@ func (gs *gameServer) AddVote() {
 
 func (gs *gameServer) SetVoteResult() {
 
+}
+
+func (gs *gameServer) TestAddVote(moves []paxosrpc.Move) {
+	gs.libpaxos.Propose(moves)
 }

@@ -9,7 +9,6 @@ type Node struct {
 
 const (
 	OK Status = iota + 1
-	Accept
 	Reject
 )
 
@@ -19,18 +18,21 @@ type ReceivePrepareArgs struct {
 }
 
 type ReceivePrepareReply struct {
-	Status                Status
-	HighestProposalNumber ProposalNumber
-	HighestProposal       Proposal
+	Status              Status
+	HasAcceptedProposal bool
+	AcceptedProposal    Proposal
 }
 
 type ReceiveAcceptArgs struct {
+	Proposal Proposal
 }
 
 type ReceiveAcceptReply struct {
+	Status
 }
 
 type ReceiveDecideArgs struct {
+	Proposal Proposal
 }
 
 type ReceiveDecideReply struct {

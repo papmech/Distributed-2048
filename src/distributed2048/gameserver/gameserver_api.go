@@ -3,12 +3,12 @@
 package gameserver
 
 import (
-
+	"distributed2048/rpc/paxosrpc"
 )
 
 type GameServer interface {
-	DoVote() ()
-	AddVote() ()
-	SetVoteResult() ()
+	DoVote()
+	AddVote()
+	SetVoteResult()
+	TestAddVote(moves []paxosrpc.Move)
 }
-

@@ -34,19 +34,20 @@ type gameServer struct {
 	hostport string
 
 	libpaxos libpaxos.Libpaxos
+
+	// Client-related stuff
 	pattern string
 	clients map[int]*Client
+	addCh     chan *Client
+	delCh     chan *Client
+//	sendAllCh chan *Message
+	doneCh    chan bool
+	errCh     chan error
 }
 
 // NewGameServer creates an instance of a Game Server. It does not return
 // until it has successfully joined the cluster of game servers.
 func NewGameServer(centralServerHostPort, hostname string, port int, pattern string) (GameServer, error) {
-	gs := &gameServer{
-		hostname: hostname,
-		port:     port,
-		hostport: fmt.Sprintf("%s:%d", hostname, port),
-	}
-
 	// Register with the central server
 	client, err := rpc.DialHTTP("tcp", centralServerHostPort)
 	if err != nil {
@@ -54,7 +55,8 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		LOGE.Println(err)
 		return nil, err
 	}
-	args := &centralrpc.RegisterGameServerArgs{gs.hostport}
+	gshostport := fmt.Sprintf("%s:%d", hostname, port)
+	args := &centralrpc.RegisterGameServerArgs{gshostport}
 	var reply centralrpc.RegisterGameServerReply
 	reply.Status = centralrpc.NotReady
 	for reply.Status != centralrpc.OK {
@@ -71,7 +73,7 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	}
 	LOGV.Printf("GS node %d finished registration with CS\n", reply.GameServerID)
 
-	gs.libpaxos, err = libpaxos.NewLibpaxos(reply.GameServerID, gs.hostport, reply.Servers)
+	libpaxos, err := libpaxos.NewLibpaxos(reply.GameServerID, gshostport, reply.Servers)
 	if err != nil {
 		LOGE.Println("Could not start libpaxos")
 		LOGE.Println(err)
@@ -80,12 +82,31 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 
 	LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
 
+	// Client related stuff
 	clients := make(map[int]*Client)
-	return &Server {
+	addCh := make(chan *Client)
+	delCh := make(chan *Client)
+//	sendAllCh := make(chan *Message)
+	doneCh := make(chan bool)
+	errCh := make(chan error)
+
+	gs := &gameServer{
+		hostname,
+		port,
+		gshostport,
+		libpaxos,
 		pattern,
+//		messages,
 		clients,
+		addCh,
+		delCh,
+//		sendAllCh,
+		doneCh,
+		errCh,
+
 	}
 
+	go gs.ListenForClients()
 	return gs, nil
 }
 
@@ -100,37 +121,38 @@ func (gs *gameServer) AddVote() {
 func (gs *gameServer) SetVoteResult() {
 }
 
-func (s *GameServer) ListenForClients() {
+func (gs *gameServer) ListenForClients() {
 	LOGV.Println("Listening for connection from new clients")
 
 	// websocket handler
 	onConnected := func(ws *websocket.Conn) {
-		defer func() {
-			err := ws.Close()
-			if err != nil {
-				s.errCh <- err
-			}
-		}()
+		LOGV.Print("Client has connected")
+//		defer func() {
+//			err := ws.Close()
+//			if err != nil {
+//				gs.errCh <- err
+//			}
+//		}()
 
 		//		client := NewClient(ws, s)
-		s.Add(client)
+	//		s.Add(client)
 		//		client.Listen()
 	}
-	http.Handle(s.pattern, websocket.Handler(onConnected))
+	http.Handle(gs.pattern, websocket.Handler(onConnected))
 	LOGV.Println("Created handler")
 
 	for {
 		select {
 			// Add a new client
-		case c := <-s.addCh:
-			LOGV.Println("added new client")
+//		case c := <-gs.addCh:
+//			LOGV.Println("added new client")
 
 			// Delete a client
-		case c := <-s.delCh:
+//		case c := <-gs.delCh:
 			// Broadcast a message to all clients
-		case msg := <-s.sendAllCh:
+//		case msg := <-gs.sendAllCh:
 			// Error channel
-		case err := <-s.errCh:
+//		case err := <-gs.errCh:
 
 		}
 	}

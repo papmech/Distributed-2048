@@ -13,6 +13,17 @@ function KeyboardInputManager() {
   }
 
   this.listen();
+  this.moveStack = [];
+  var self = this;
+  setInterval(function()
+  {
+    var stackSize = self.moveStack.length;
+    if (stackSize > 0) {
+        var lastMove = self.moveStack[self.moveStack.length-1];
+        self.moveStack = [];
+        self.emit("move", lastMove);
+    }
+  }, 1000);
 }
 
 KeyboardInputManager.prototype.on = function (event, callback) {
@@ -60,7 +71,8 @@ KeyboardInputManager.prototype.listen = function () {
     if (!modifiers) {
       if (mapped !== undefined) {
         event.preventDefault();
-        self.emit("move", mapped);
+        self.moveStack.push(mapped);
+//        self.emit("move", mapped);
       }
     }
 

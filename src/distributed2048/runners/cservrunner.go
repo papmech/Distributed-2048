@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-const defaultCentralServerPort = 15340
+const defaultCentralServerPort = 25340
 
 var (
 	port           = flag.Int("port", defaultCentralServerPort, "port number to listen on")

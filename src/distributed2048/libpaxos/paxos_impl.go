@@ -28,29 +28,22 @@ var LOGE = util.NewLogger(ERROR_LOG, "PAXOS|ERROR", os.Stderr)
 
 type libpaxos struct {
 	allNodes       []paxosrpc.Node
-	majorityCount  int
-	nodeInfo       paxosrpc.Node
-	decidedHandler func(uint32, []paxosrpc.Move)
+	majorityCount  int // minimum number of nodes for a majority to be reached
+	myNode         paxosrpc.Node
+	decidedHandler func(uint32, []paxosrpc.Move) // called when decided value received after successful paxos round
 
 	nodesMutex sync.Mutex
 	nodes      map[uint32]*node
 
-	// acceptedProposalsMutex sync.Mutex
-	// acceptedProposals      []*paxosrpc.Proposal
-
 	dataMutex                 sync.Mutex
 	highestProposalNumberSeen *paxosrpc.ProposalNumber
 	highestAcceptedProposal   *paxosrpc.Proposal
-	slotBox                   *SlotBox
-	slotBoxMutex              sync.Mutex
-	triggerHandlerCallCh      chan struct{}
-	// currentProposal           *paxosrpc.Proposal
-	// slotNumbers           map[uint32]bool
-	// nextCommandSlotNumber uint32
 
-	decidedCh  chan *paxosrpc.Proposal
-	newValueCh chan []paxosrpc.Move
-	// doProposalCh chan *paxosrpc.Proposal
+	slotBox      *SlotBox   // holds previously decided slots
+	slotBoxMutex sync.Mutex // lock for slotBox
+
+	triggerHandlerCallCh chan struct{}
+	newValueCh           chan []paxosrpc.Move
 
 	newValuesQueue     *list.List
 	newValuesQueueLock sync.Mutex
@@ -60,17 +53,13 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 	lp := &libpaxos{
 		allNodes:                  allNodes,
 		majorityCount:             len(allNodes)/2 + 1,
-		nodeInfo:                  paxosrpc.Node{nodeID, hostport},
+		myNode:                    paxosrpc.Node{nodeID, hostport},
 		nodes:                     make(map[uint32]*node),
-		decidedCh:                 make(chan *paxosrpc.Proposal),
 		newValueCh:                make(chan []paxosrpc.Move),
 		highestProposalNumberSeen: &paxosrpc.ProposalNumber{0, nodeID},
 		slotBox:                   NewSlotBox(),
 		triggerHandlerCallCh:      make(chan struct{}, 1000),
-		// slotNumbers:               make(map[uint32]bool),
-		// nextCommandSlotNumber:     0,
-		newValuesQueue: list.New(),
-		// doProposalCh:  make(chan *paxosrpc.Proposal),
+		newValuesQueue:            list.New(),
 	}
 
 	for _, node := range allNodes {
@@ -93,29 +82,34 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 }
 
 func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *paxosrpc.ReceivePrepareReply) error {
-	// LOGV.Println(lp.nodeInfo.ID, "received prepare", args.ProposalNumber)
-	lp.dataMutex.Lock()
 
 	// TODO: Remove this
 	// Randomly simulate time out
 	// doTimeout := rand.Int()%100 < 3 // 20% of the time
 	// if doTimeout {
-	// 	LOGV.Println(lp.nodeInfo.ID, "simulating 15 second interruption.")
+	// 	LOGV.Println(lp.myNode.ID, "simulating 15 second interruption.")
 	// 	time.Sleep(15 * time.Second)
 	// }
+
+	lp.dataMutex.Lock()
 
 	lp.slotBoxMutex.Lock()
 	slot := lp.slotBox.Get(args.CommandSlotNumber)
 	lp.slotBoxMutex.Unlock()
 	if slot != nil {
+		// The Proposer will suggest a slot number for its proposal. If that slot
+		// number has already been decided upon, tell the Proposer, and give it
+		// the decided value, so it can update its own slot box and choose a
+		// different slot number.
 		reply.Status = paxosrpc.DecidedValueExists
 		reply.DecidedSlotNumber = slot.Number
 		reply.DecidedValue = slot.Value
 	} else if lp.highestProposalNumberSeen != nil && args.ProposalNumber.LessThan(lp.highestProposalNumberSeen) {
-		LOGV.Println(lp.nodeInfo.ID, "rejected prepare", args.ProposalNumber)
+		// If the proposal number is not highest, reject automatically.
 		reply.Status = paxosrpc.Reject
 	} else {
-		LOGV.Println(lp.nodeInfo.ID, "accepted prepare", args.ProposalNumber)
+		// If the proposal number is highest, then OK it, but also send back
+		// any accepted proposals.
 		lp.highestProposalNumberSeen = &args.ProposalNumber
 		reply.Status = paxosrpc.OK
 		if lp.highestAcceptedProposal != nil {
@@ -125,20 +119,17 @@ func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *pax
 			reply.HasAcceptedProposal = false
 		}
 	}
-
 	lp.dataMutex.Unlock()
 	return nil
 }
 
 func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxosrpc.ReceiveAcceptReply) error {
-	// LOGV.Println(lp.nodeInfo.ID, "received accept", args.Proposal.Number)
 	lp.dataMutex.Lock()
 
+	// Only accept a proposal if it has the highest proposal number so far.
 	if lp.highestAcceptedProposal != nil && args.Proposal.Number.LessThan(&lp.highestAcceptedProposal.Number) {
-		LOGV.Println(lp.nodeInfo.ID, "rejected accept", args.Proposal.Number)
 		reply.Status = paxosrpc.Reject
 	} else {
-		LOGV.Println(lp.nodeInfo.ID, "accepted accept", args.Proposal.Number)
 		lp.highestAcceptedProposal = &args.Proposal
 		lp.highestProposalNumberSeen = &args.Proposal.Number
 		reply.Status = paxosrpc.OK
@@ -149,18 +140,21 @@ func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxos
 }
 
 func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxosrpc.ReceiveDecideReply) error {
-	LOGV.Println(lp.nodeInfo.ID, "received decide", args.Proposal.Number, "for slot", args.Proposal.CommandSlotNumber)
 	lp.dataMutex.Lock()
+
+	// Reset the paxos state for the next round of paxos
 	lp.highestAcceptedProposal = nil
 
+	// Send the proposal to the slot box.
 	lp.slotBoxMutex.Lock()
 	lp.slotBox.Add(NewSlot(args.Proposal.CommandSlotNumber, args.Proposal.Value))
 	lp.slotBoxMutex.Unlock()
+
+	// Trigger the go routine which will check if any values can be sent to
+	// the handler.
 	lp.triggerHandlerCallCh <- struct{}{}
 
 	lp.dataMutex.Unlock()
-	// TODO: only call the handler IF we obtain the next slot number in line
-	// lp.decidedHandler(args.Proposal.CommandSlotNumber, args.Proposal.Value)
 	return nil
 }
 
@@ -173,6 +167,8 @@ func (lp *libpaxos) DecidedHandler(handler func(slotNumber uint32, moves []paxos
 	lp.decidedHandler = handler
 }
 
+// handleCaller is triggered by sending to triggerHandlerCallCh to check if
+// the next unread slot can be sent to the handler.
 func (lp *libpaxos) handleCaller() {
 	for {
 		select {
@@ -192,14 +188,18 @@ func (lp *libpaxos) handleCaller() {
 	}
 }
 
+// controller handles the arrival of new proposal values, and also what
+// happens when a paxos round is complete.
+//
+// New values should be queue if a paxos round is in progress.
+//
+// When a paxos round completes, the next value in the queue is proposed.
 func (lp *libpaxos) controller() {
-	defer LOGV.Println("controller() ending")
 	proposalInProgress := false
 	doneCh := make(chan struct{})
 	for {
 		select {
 		case moves := <-lp.newValueCh:
-			// LOGV.Println("Controller received moves", util.MovesString(moves))
 			if proposalInProgress {
 				lp.newValuesQueueLock.Lock()
 				lp.newValuesQueue.PushBack(moves)
@@ -208,8 +208,6 @@ func (lp *libpaxos) controller() {
 				proposalInProgress = true
 				go lp.doPropose(moves, doneCh)
 			}
-		// case proposal := <-lp.decidedCh:
-		// lp.decidedHandler(proposal.CommandSlotNumber, proposal.Value)
 		case <-doneCh:
 			lp.newValuesQueueLock.Lock()
 			if e := lp.newValuesQueue.Front(); e != nil {
@@ -234,24 +232,22 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 		retry := false
 
 		// PHASE 1
-		LOGV.Println("Proposer", lp.nodeInfo.ID, ": PHASE 1")
-		// LOGV.Println("Proposing", util.MovesString(moves))
+		LOGV.Println("Proposer", lp.myNode.ID, ": PHASE 1")
 
-		lp.dataMutex.Lock()
 		// Make a new proposal such that my_n > n_h
+		lp.dataMutex.Lock()
 		lp.slotBoxMutex.Lock()
-		myProp := paxosrpc.NewProposal(lp.highestProposalNumberSeen.Number+1, lp.slotBox.GetNextUnknownSlotNumber(), lp.nodeInfo.ID, moves)
+		myProp := paxosrpc.NewProposal(lp.highestProposalNumberSeen.Number+1, lp.slotBox.GetNextUnknownSlotNumber(), lp.myNode.ID, moves)
 		lp.highestProposalNumberSeen = &myProp.Number
-		// lp.currentProposal = myProp // TODO: Need this?
 		lp.slotBoxMutex.Unlock()
 		lp.dataMutex.Unlock()
 
 		// Send proposal to everybody
-		promisedCount := 1
+		promisedCount := 1 // include myself
 		var otherProposal *paxosrpc.Proposal
 		lp.nodesMutex.Lock()
 		for _, node := range lp.nodes {
-			if node.Info.ID == lp.nodeInfo.ID {
+			if node.Info.ID == lp.myNode.ID {
 				continue // skip myself
 			}
 
@@ -260,7 +256,7 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 				continue
 			}
 
-			args := &paxosrpc.ReceivePrepareArgs{lp.nodeInfo, myProp.Number, myProp.CommandSlotNumber}
+			args := &paxosrpc.ReceivePrepareArgs{lp.myNode, myProp.Number, myProp.CommandSlotNumber}
 			var reply paxosrpc.ReceivePrepareReply
 			reply.Status = paxosrpc.Reject
 
@@ -307,7 +303,7 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 
 		// Got majority?
 		if promisedCount < lp.majorityCount {
-			LOGV.Println(lp.nodeInfo.ID, " couldn't get a majority. Got", promisedCount, "needed", lp.majorityCount)
+			LOGV.Println(lp.myNode.ID, " couldn't get a majority. Got", promisedCount, "needed", lp.majorityCount)
 			// Backoff
 			num := time.Duration(rand.Int()%100 + 25)
 			time.Sleep(num * time.Millisecond)
@@ -318,16 +314,16 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 		if otherProposal == nil {
 			propToAccept = myProp
 		}
-		LOGV.Println(lp.nodeInfo.ID, "got a majority on", propToAccept.Number.String())
+		LOGV.Println(lp.myNode.ID, "got a majority on", propToAccept.Number.String())
 
 		// PHASE 2
-		LOGV.Println("Proposer", lp.nodeInfo.ID, ": PHASE 2")
+		LOGV.Println("Proposer", lp.myNode.ID, ": PHASE 2")
 
 		// Send <accept, myn, V> to all nodes
 		acceptedCount := 1
 		lp.nodesMutex.Lock()
 		for _, node := range lp.nodes {
-			if node.Info.ID == lp.nodeInfo.ID {
+			if node.Info.ID == lp.myNode.ID {
 				continue // skip myself
 			}
 
@@ -364,7 +360,7 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 		// Send <decide, va> to all nodes
 		lp.nodesMutex.Lock()
 		for _, node := range lp.nodes {
-			if node.Info.ID == lp.nodeInfo.ID {
+			if node.Info.ID == lp.myNode.ID {
 				continue // skip myself
 			}
 

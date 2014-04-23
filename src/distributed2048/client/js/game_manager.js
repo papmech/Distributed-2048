@@ -17,7 +17,8 @@ function GameManager(size, InputManager, Actuator, StorageManager, ConnManager) 
 
   var xmlHttp = null;
   xmlHttp = new XMLHttpRequest();
-  xmlHttp.open( "GET", "http://128.237.201.5:25340", false );
+//  xmlHttp.open( "GET", "http://128.237.201.5:25340", false );
+  xmlHttp.open( "GET", "http://localhost:25340", false );
   xmlHttp.send( null );
   this.connManager.getConnectionFromCServ(xmlHttp.responseText, null)
 }

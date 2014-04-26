@@ -11,9 +11,9 @@ import (
 	"distributed2048/rpc/paxosrpc"
 	"distributed2048/cmdlineclient"
 	"distributed2048/util"
+	"distributed2048/tests"
 	"os"
 	"time"
-	"distributed2048/tests"
 )
 
 
@@ -36,8 +36,7 @@ func main() {
 	processError(err, util.CSFAIL, 3)
 
 	// Step 2: Boot Game Server
-	_, err := gameserver.NewGameServer(util.CENTRALHOSTPOST, util.LOCALHOST,
-		util.GAMESERVERPORT, util.DEFAULTPATTERN)
+	_, err = gameserver.NewGameServer(util.CENTRALHOSTPOST, util.LOCALHOST, util.GAMESERVERPORT, util.DEFAULTPATTERN)
 	processError(err, util.GSFAIL, 3)
 
 	// Step 3: Boot Testing Client
@@ -46,7 +45,7 @@ func main() {
 	processError(err, util.CFAIL, 0)
 
 	// Initialize moves + obtain correct answer
-	movelist := []int{ paxosrpc.Left, paxosrpc.Right, paxosrpc.Left }
+	movelist := []int{ int(paxosrpc.Left), int(paxosrpc.Right), int(paxosrpc.Left) }
 	initial, score, _, _ := cli.GetGameState()
 	b, sc, o, w := util.CalculateGameState(initial, score, movelist)
 

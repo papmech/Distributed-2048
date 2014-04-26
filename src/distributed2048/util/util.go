@@ -61,7 +61,7 @@ func CompareDir(dir1, dir2 paxosrpc.Direction) bool {
 
 func CalculateGameState(initial lib2048.Grid, score int, moves []int) (lib2048.Grid, int, bool, bool) {
 	game := lib2048.NewGame2048()
-	game.SetGameState(initial, score, false, false)
+	game.SetGameState(initial, score)
 	for _, m := range moves {
 		game.MakeMove(paxosrpc.Direction(m))
 	}

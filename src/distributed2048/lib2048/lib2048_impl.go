@@ -27,7 +27,7 @@ func NewGame2048() Game2048 {
 	return g
 }
 
-func (g *game) SetGameState(state Grid, newscore int, over bool, won bool) {
+func (g *game) SetGameState(state Grid, newscore int) {
 	g.grid = state
 	g.score = newscore
 }

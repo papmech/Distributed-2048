@@ -1,12 +1,15 @@
-package main
+package cmdlineclient
 
 import (
 	"time"
 	"fmt"
 	"net/http"
 	"distributed2048/lib2048"
+	"distributed2048/centralserver"
 	"code.google.com/p/go.net/websocket"
 	"io/ioutil"
+	"encoding/json"
+	"strconv"
 )
 
 const (
@@ -26,7 +29,7 @@ type cclient struct {
 func NewCClient(cservAddr string, interval int) (Cclient, error) {
 	// Get server addr from central server
 	isReady := false
-	hostport := nil
+	hostport := ""
 	for (!isReady) {
 		resp, err := http.Get(cservAddr)
 		if err != nil {
@@ -39,10 +42,16 @@ func NewCClient(cservAddr string, interval int) (Cclient, error) {
 			fmt.Println("Your mother phat")
 			return nil, err
 		}
-		fmt.Println("received data from cserv: " + data)
-		isReady = data.Status
+		fmt.Println("received data from cserv")
+		unpacked := &centralserver.HttpReply{}
+		err = json.Unmarshal(data, &unpacked)
+		if err != nil {
+			fmt.Println("Your mother phat")
+			return nil, err
+		}
+		isReady = unpacked.Status == "OK"
 		if isReady {
-			hostport = data.Hostport
+			hostport = unpacked.Hostport
 		}
 		time.Sleep(1000 * time.Millisecond)
 	}
@@ -76,10 +85,10 @@ func (c *cclient) tickHandler(ticker *time.Ticker) {
 		case <- ticker.C:
 			length := len(c.movelist)
 			if length > 0 {
-				c.conn.Write([]byte(c.movelist[length - 1]))
+				c.conn.Write([]byte(strconv.Itoa(c.movelist[length - 1])))
 				c.movelist = c.movelist[0:0]
 			}
-		case <- c.quit:
+		case <- c.quitchan:
 			ticker.Stop()
 			return
 		}
@@ -91,7 +100,7 @@ func (c *cclient) Close() {
 }
 
 func (c *cclient) InputMove(move int) {
-	append(c.movelist, move)
+	c.movelist = append(c.movelist, move)
 }
 
 func (c *cclient) GetGameState() (lib2048.Grid, int, bool, bool) {

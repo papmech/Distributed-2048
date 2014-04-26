@@ -51,7 +51,7 @@ func (g *game) GetScore() int {
 	return g.score
 }
 
-func (g *game) GetBoard() [BoardLen][BoardLen]int {
+func (g *game) GetBoard() Grid {
 	return g.grid
 }
 

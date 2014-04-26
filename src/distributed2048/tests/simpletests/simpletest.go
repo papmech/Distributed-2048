@@ -6,8 +6,6 @@ package main
 // Der client be making 3 simple moves
 // ======================================================================== //
 import (
-	"distributed2048/centralserver"
-	"distributed2048/gameserver"
 	"distributed2048/rpc/paxosrpc"
 	"distributed2048/cmdlineclient"
 	"distributed2048/util"
@@ -31,25 +29,18 @@ func processError(err error, msg string, pause int) {
 }
 
 func main() {
-	// Step 1: Boot Central Server
-	_, err := centralserver.NewCentralServer(util.CENTRALPORT, 1)
-	processError(err, util.CSFAIL, 3)
-
-	// Step 2: Boot Game Server
-	_, err = gameserver.NewGameServer(util.CENTRALHOSTPOST, util.LOCALHOST, util.GAMESERVERPORT, util.DEFAULTPATTERN)
-	processError(err, util.GSFAIL, 3)
-
-	// Step 3: Boot Testing Client
+	// Step 1: Boot Testing Client
 	cservAddr := "http://" + util.CENTRALHOSTPOST
 	cli, err := cmdlineclient.NewCClient(cservAddr, util.DEFAULTINTERVAL)
 	processError(err, util.CFAIL, 0)
 
-	// Initialize moves + obtain correct answer
-	movelist := []int{ int(paxosrpc.Left), int(paxosrpc.Right), int(paxosrpc.Left) }
+	// Step 2: Initialize moves + obtain correct answer
+	time.Sleep(2 * time.Second)
+	movelist := []paxosrpc.Direction{ paxosrpc.Left, paxosrpc.Right, paxosrpc.Left }
 	initial, score, _, _ := cli.GetGameState()
 	b, sc, o, w := util.CalculateGameState(initial, score, movelist)
 
-	// Step 4: Test
+	// Step 3: Test
 	for _, m := range(movelist) {
 		cli.InputMove(m)
 		time.Sleep(1 * time.Second)

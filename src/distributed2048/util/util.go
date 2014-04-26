@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"distributed2048/lib2048"
+	"fmt"
 )
 
 const (
@@ -21,6 +22,17 @@ const (
 	CFAIL = "PHAIL: COULD NOT START CLIENT"
 	GAMESTATEERR = "PHAIL: Not able to get game state from client"
 )
+
+type ClientMove struct {
+	Direction int
+}
+
+type Game2048State struct {
+	Won   bool
+	Over  bool
+	Grid  lib2048.Grid
+	Score int
+}
 
 func NewLogger(enabled bool, prefix string, out io.Writer) *log.Logger {
 	w := ioutil.Discard
@@ -59,11 +71,15 @@ func CompareDir(dir1, dir2 paxosrpc.Direction) bool {
 	return dir1 > dir2
 }
 
-func CalculateGameState(initial lib2048.Grid, score int, moves []int) (lib2048.Grid, int, bool, bool) {
+func CalculateGameState(initial lib2048.Grid, score int, moves []paxosrpc.Direction) (lib2048.Grid, int, bool, bool) {
 	game := lib2048.NewGame2048()
 	game.SetGameState(initial, score)
+	fmt.Print("Initial state is ")
+	fmt.Println(initial)
 	for _, m := range moves {
-		game.MakeMove(paxosrpc.Direction(m))
+		game.MakeMove(m)
+		fmt.Print("Current State is ")
+		fmt.Println(game.GetBoard())
 	}
 	return game.GetBoard(), game.GetScore(), game.IsGameOver(), game.IsGameWon()
 }

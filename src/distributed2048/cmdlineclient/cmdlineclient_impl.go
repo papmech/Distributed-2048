@@ -56,33 +56,35 @@ func NewCClient(cservAddr string, interval int) (Cclient, error) {
 		return nil, err
 	}
 	game := lib2048.NewGame2048()
-	// Fire the ticker
-	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
-	quit := make(chan int)
 	cc := &cclient {
 		ws,
 		game,
+		make([]int, 0),
+		make(chan int),
 	}
-
-
+	// Fire the ticker
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	go cc.tickHandler(ticker)
 	return cc, nil
 }
 
 // Ticker Function
-func tickHandler(ticker time.Ticker, quit chan int) {
+func (c *cclient) tickHandler(ticker *time.Ticker) {
 	defer fmt.Println("client has stopped ticking.")
 	for {
 		select {
 		case <- ticker.C:
-
-		case <- quit:
+			length := len(c.movelist)
+			if length > 0 {
+				c.conn.Write([]byte(c.movelist[length - 1]))
+				c.movelist = c.movelist[0:0]
+			}
+		case <- c.quit:
 			ticker.Stop()
 			return
 		}
 	}
 }
-
-
 
 func (c *cclient) Close() {
 	c.quitchan <- 1
@@ -92,7 +94,6 @@ func (c *cclient) InputMove(move int) {
 	append(c.movelist, move)
 }
 
-func (c *cclient) GetGameState() {
-
+func (c *cclient) GetGameState() (lib2048.Grid, int, bool, bool) {
+	return c.game.GetBoard(), c.game.GetScore(), c.game.IsGameOver(), c.game.IsGameWon()
 }
-

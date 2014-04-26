@@ -19,6 +19,7 @@ const (
 	CSFAIL = "PHAIL: COULD NOT START CENTRAL SERVER"
 	GSFAIL = "PHAIL: COULD NOT START GAME SERVER"
 	CFAIL = "PHAIL: COULD NOT START CLIENT"
+	GAMESTATEERR = "PHAIL: Not able to get game state from client"
 )
 
 func NewLogger(enabled bool, prefix string, out io.Writer) *log.Logger {
@@ -58,8 +59,11 @@ func CompareDir(dir1, dir2 paxosrpc.Direction) bool {
 	return dir1 > dir2
 }
 
-func CalculateGameState(initial lib2048.Grid, moves []int) lib2048.Grid {
+func CalculateGameState(initial lib2048.Grid, score int, moves []int) (lib2048.Grid, int, bool, bool) {
 	game := lib2048.NewGame2048()
-	game.SetGameState(initial)
-
+	game.SetGameState(initial, score, false, false)
+	for _, m := range moves {
+		game.MakeMove(paxosrpc.Direction(m))
+	}
+	return game.GetBoard(), game.GetScore(), game.IsGameOver(), game.IsGameWon()
 }

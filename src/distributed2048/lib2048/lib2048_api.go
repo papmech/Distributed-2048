@@ -21,5 +21,4 @@ type Game2048 interface {
 	IsGameOver() bool
 	IsGameWon() bool
 	String() string
-	SetGameState()
 }

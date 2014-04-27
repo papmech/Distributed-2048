@@ -22,12 +22,14 @@ func main() {
 
 	gameServers := make([]gameserver.GameServer, 0)
 	gsCh := make(chan gameserver.GameServer)
-	makeGS := func(ch chan gameserver.GameServer, master, hostname string, port int) {
-		gs, _ := gameserver.NewGameServer(master, hostname, port)
+	makeGS := func(ch chan gameserver.GameServer, master, hostname string, port int, pattern string) {
+		gs, _ := gameserver.NewGameServer(master, hostname, port, pattern)
 		ch <- gs
 	}
+
+
 	for i := 0; i < 3; i++ {
-		go makeGS(gsCh, "localhost:15340", "localhost", 15400+i)
+		go makeGS(gsCh, "localhost:15340", "localhost", 15400+i, "/")
 	}
 	for i := 0; i < 3; i++ {
 		gs := <-gsCh

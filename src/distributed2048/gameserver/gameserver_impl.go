@@ -49,7 +49,6 @@ type gameServer struct {
 	clients      map[int]*client
 	addCh        chan *client
 	delCh        chan *client
-	//	sendAllCh chan *Message
 	doneCh     chan bool
 	errCh      chan error
 	numClients int
@@ -57,7 +56,7 @@ type gameServer struct {
 	newMovesCh          chan []paxosrpc.Move
 	totalNumGameServers int
 	game2048            lib2048.Game2048
-	stateBroadcastCh    chan *game2048State
+	stateBroadcastCh    chan *util.Game2048State
 	clientMoveCh        chan *paxosrpc.Move
 }
 
@@ -112,19 +111,17 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		gshostport,
 		newlibpaxos,
 		pattern,
-		//		messages,
 		sync.Mutex{},
 		clients,
 		addCh,
 		delCh,
-		//		sendAllCh,
 		doneCh,
 		errCh,
 		0,
 		make(chan []paxosrpc.Move, 1000),
 		len(reply.Servers),
 		lib2048.NewGame2048(), // TODO: Use paxos to agree on game state
-		make(chan *game2048State, 1000),
+		make(chan *util.Game2048State, 1000),
 		make(chan *paxosrpc.Move, 1000),
 	}
 	gs.libpaxos.DecidedHandler(gs.handleDecided)
@@ -158,13 +155,6 @@ func (gs *gameServer) horseShit() {
 	}
 }
 
-type game2048State struct {
-	Won   bool
-	Over  bool
-	Grid  [lib2048.BoardLen][lib2048.BoardLen]int
-	Score int
-}
-
 func (gs *gameServer) handleDecided(slotNumber uint32, moves []paxosrpc.Move) {
 	LOGV.Println("GAME SERVER", gs.id, "got slot", slotNumber)
 
@@ -191,10 +181,6 @@ func (gs *gameServer) clientMasterHandler() {
 	}
 }
 
-type clientMove struct {
-	Direction int
-}
-
 func (gs *gameServer) clientListenRead(ws *websocket.Conn) {
 	defer func() {
 		LOGV.Println("I'm hauling ass")
@@ -204,7 +190,7 @@ func (gs *gameServer) clientListenRead(ws *websocket.Conn) {
 	for {
 		select {
 		default:
-			var move clientMove
+			var move util.ClientMove
 			err := websocket.JSON.Receive(ws, &move)
 			if err == io.EOF {
 				return
@@ -278,7 +264,7 @@ func (gs *gameServer) processMoves() {
 				// Update the 2048 state
 				gs.game2048.MakeMove(majorityDir)
 
-				state := &game2048State{
+				state := &util.Game2048State{
 					Won:   gs.game2048.IsGameWon(),
 					Over:  gs.game2048.IsGameOver(),
 					Grid:  gs.game2048.GetBoard(),
@@ -288,8 +274,10 @@ func (gs *gameServer) processMoves() {
 				gs.stateBroadcastCh <- state
 
 				// Update the bucket size
-				currentBucketSize = sizeQueue[0]
-				sizeQueue = sizeQueue[1:]
+				if len(sizeQueue) > 0 {
+					currentBucketSize = sizeQueue[0]
+					sizeQueue = sizeQueue[1:]
+				}
 			}
 
 		}
@@ -315,17 +303,6 @@ func (gs *gameServer) clientTasker() {
 	}
 }
 
-func (gs *gameServer) DoVote() {
-
-}
-
-func (gs *gameServer) AddVote() {
-
-}
-
-func (gs *gameServer) SetVoteResult() {
-}
-
 func (gs *gameServer) ListenForClients() {
 	LOGV.Println("Listening for connection from new clients")
 
@@ -338,55 +315,19 @@ func (gs *gameServer) ListenForClients() {
 		gs.clients[gs.numClients] = c
 		gs.numClients += 1
 		gs.clientsMutex.Unlock()
-
+		state := &util.Game2048State{
+			Won:   gs.game2048.IsGameWon(),
+			Over:  gs.game2048.IsGameOver(),
+			Grid:  gs.game2048.GetBoard(),
+			Score: gs.game2048.GetScore(),
+		}
+		gs.stateBroadcastCh <- state
 		gs.clientListenRead(ws)
-		// select {}
-
-		// for {
-		// 	var in []byte
-		// 	websocket.Message.Receive(ws, &in)
-		// 	// if err := websocket.Message.Receive(ws, &in); err != nil {
-		// 	// LOGE.Println("Error when receiving message from client")
-		// 	// }
-		// 	// fmt.Printf("Received: %s\n", string(in))
-		// 	// websocket.Message.Send(ws, in)
-		// }
-
-		// err := ws.Close()
-		// if err != nil {
-		// 	LOGE.Println(err)
-		// }
-
-		//		for {
-		//			LOGV.Println("I r t3h spammingz")
-		//			time.Sleep(1000)
-		//		}
-		//		defer func() {
-		//			err := ws.Close()
-		//			if err != nil {
-		//				gs.errCh <- err
-		//			}
-		//		}()
-
-		//		client := NewClient(ws, s)
-		//		s.Add(client)
-		//		client.Listen()
 	}
 	http.Handle(gs.pattern, websocket.Handler(onConnected))
 
 	for {
 		select {
-		// Add a new client
-		//		case c := <-gs.addCh:
-		//			LOGV.Println("added new client")
-
-		// Delete a client
-		//		case c := <-gs.delCh:
-		// Broadcast a message to all clients
-		//		case msg := <-gs.sendAllCh:
-		// Error channel
-		//		case err := <-gs.errCh:
-
 		}
 	}
 }

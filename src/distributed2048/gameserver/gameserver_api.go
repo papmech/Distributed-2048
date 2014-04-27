@@ -7,9 +7,6 @@ import (
 )
 
 type GameServer interface {
-	DoVote()
-	AddVote()
-	SetVoteResult()
 	TestAddVote(moves []paxosrpc.Move)
 	ListenForClients()
 }

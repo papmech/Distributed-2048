@@ -8,10 +8,11 @@ import (
 	"math/rand"
 )
 
+type Grid [BoardLen][BoardLen]int
 var r = rand.New(rand.NewSource(15440))
 
 type game struct {
-	grid    [BoardLen][BoardLen]int
+	grid    Grid
 	score   int
 	history []paxosrpc.Direction
 }
@@ -24,6 +25,11 @@ func NewGame2048() Game2048 {
 	g.reset()
 	g.newRound(InitialTileCount)
 	return g
+}
+
+func (g *game) SetGameState(state Grid, newscore int) {
+	g.grid = state
+	g.score = newscore
 }
 
 func (g *game) MakeMove(dir paxosrpc.Direction) {
@@ -45,7 +51,7 @@ func (g *game) GetScore() int {
 	return g.score
 }
 
-func (g *game) GetBoard() [BoardLen][BoardLen]int {
+func (g *game) GetBoard() Grid {
 	return g.grid
 }
 

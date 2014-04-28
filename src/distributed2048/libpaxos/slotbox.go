@@ -9,6 +9,7 @@ type Slot struct {
 	Value  []paxosrpc.Move
 }
 
+// SlotBox stores the history of all decided proposals.
 type SlotBox struct {
 	slots                 map[uint32]*Slot
 	nextUnreadSlotNumber  uint32
@@ -23,39 +24,35 @@ func NewSlot(number uint32, value []paxosrpc.Move) *Slot {
 	return &Slot{number, value}
 }
 
+// Add puts the given slot into the slotbox, and fastforwards the next unknown
+// slot number forward if necessary.
 func (sb *SlotBox) Add(slot *Slot) {
-	// sb.mutex.Lock()
 	sb.slots[slot.Number] = slot
 	sb.fastForward()
-	// sb.mutex.Unlock()
 }
 
+// Gets a specific slot, and returns nil if it does not exist
 func (sb *SlotBox) Get(number uint32) *Slot {
-	// sb.mutex.Lock()
 	slot, exists := sb.slots[number]
-	// sb.mutex.Unlock()
 	if !exists {
 		return nil
 	}
 	return slot
 }
 
+// Gets the number of next unfilled slot
 func (sb *SlotBox) GetNextUnknownSlotNumber() uint32 {
-	// sb.mutex.Lock()
 	nextNum := sb.nextUnknownSlotNumber
-	// sb.mutex.Unlock()
 	return nextNum
 }
 
+// Gets the slot that has not yet been read
 func (sb *SlotBox) GetNextUnreadSlot() *Slot {
-	// sb.mutex.Lock()
 	slot, exists := sb.slots[sb.nextUnreadSlotNumber]
 	if !exists {
-		// sb.mutex.Unlock()
 		return nil
 	}
 	sb.nextUnreadSlotNumber++
-	// sb.mutex.Unlock()
 	return slot
 }
 

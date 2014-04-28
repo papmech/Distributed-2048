@@ -222,14 +222,18 @@ func (lp *libpaxos) controller() {
 	}
 }
 
+// doPropose will keep attempting to submit a proposal to the Paxos cluster
+// with the given value. This may not always succeed because there will be
+// competing proposals, but when doPropose returns, it guarantees that the
+// value has been decided in a quorum.
 func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
-	done := false
+	done := false // true if $moves has been Decided, false otherwise.
 	for !done {
 		// TODO: Remove this
 		// Articifically stagger the proposers
 		// time.Sleep(time.Duration(rand.Int()%1000) * time.Millisecond)
 
-		retry := false
+		retry := false // true if we should try again, for whatever reason, false otherwise.
 
 		// PHASE 1
 		LOGV.Println("Proposer", lp.myNode.ID, ": PHASE 1")

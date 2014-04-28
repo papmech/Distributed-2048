@@ -17,8 +17,9 @@ const (
 type Game2048 interface {
 	MakeMove(dir paxosrpc.Direction)
 	GetScore() int
-	GetBoard() [BoardLen][BoardLen]int
+	GetBoard() Grid
 	IsGameOver() bool
 	IsGameWon() bool
 	String() string
+	SetGameState(state Grid, newscore int)
 }

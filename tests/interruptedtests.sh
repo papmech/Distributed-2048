@@ -223,9 +223,9 @@ fi
 # Run tests
 PASS_COUNT=0
 FAIL_COUNT=0
-# testOneClientOneSlightlyFaultyTwoGood
-# testTwelveClientOneSlightlyFaultyTwoGood
-# testTwelveClientTwoQuiteFaultyThreeGood
+testOneClientOneSlightlyFaultyTwoGood
+testTwelveClientOneSlightlyFaultyTwoGood
+testTwelveClientTwoQuiteFaultyThreeGood
 testTwelveClientFiveQuiteFaulty
 
 echo "Passed (${PASS_COUNT}/$((PASS_COUNT + FAIL_COUNT))) tests"

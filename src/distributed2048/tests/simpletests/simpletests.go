@@ -7,7 +7,7 @@ package main
 // ======================================================================== //
 import (
 	"distributed2048/cmdlineclient"
-	"distributed2048/rpc/paxosrpc"
+	"distributed2048/lib2048"
 	"distributed2048/util"
 	"fmt"
 	"os"
@@ -41,15 +41,15 @@ func testOneCentralOneClientOneGameserv() {
 	processError(err, util.CFAIL)
 
 	// Step 2: Initialize moves + obtain correct answer
-	movelist := []*paxosrpc.Move{
-		paxosrpc.NewMove(paxosrpc.Left),
-		paxosrpc.NewMove(paxosrpc.Right),
-		paxosrpc.NewMove(paxosrpc.Left),
-		paxosrpc.NewMove(paxosrpc.Up),
-		paxosrpc.NewMove(paxosrpc.Up),
-		paxosrpc.NewMove(paxosrpc.Down),
-		paxosrpc.NewMove(paxosrpc.Right),
-		paxosrpc.NewMove(paxosrpc.Left),
+	movelist := []*lib2048.Move{
+		lib2048.NewMove(lib2048.Left),
+		lib2048.NewMove(lib2048.Right),
+		lib2048.NewMove(lib2048.Left),
+		lib2048.NewMove(lib2048.Up),
+		lib2048.NewMove(lib2048.Up),
+		lib2048.NewMove(lib2048.Down),
+		lib2048.NewMove(lib2048.Right),
+		lib2048.NewMove(lib2048.Left),
 	}
 	desiredGame := util.CalculateGameState(cli.GetGameState(), movelist)
 

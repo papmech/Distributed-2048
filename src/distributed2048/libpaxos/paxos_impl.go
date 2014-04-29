@@ -47,8 +47,8 @@ type libpaxos struct {
 	triggerHandlerCallCh chan struct{}
 	newValueCh           chan *paxosrpc.ProposalValue
 
-	newValuesQueue     *list.List
-	newValuesQueueLock sync.Mutex
+	newValuesQueue     *list.List // Queue for new values to be later proposed
+	newValuesQueueLock sync.Mutex // Queue lock
 
 	interruptFunc func(id uint32, action PaxosAction, slotNumber uint32)
 }
@@ -81,15 +81,11 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 
 	go lp.controller()
 	go lp.handleCaller()
-	if DUMP_SLOTS {
+	if DUMP_SLOTS { // Writes the contents of slotbox to file at fixed intervals
 		go lp.dumpSlots()
 	}
 
 	return lp, nil
-}
-
-func (lp *libpaxos) GetSlotBox() *SlotBox {
-	return lp.slotBox
 }
 
 func (lp *libpaxos) SetInterruptFunc(f func(id uint32, action PaxosAction, slotNumber uint32)) {

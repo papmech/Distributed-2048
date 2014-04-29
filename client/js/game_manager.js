@@ -1,4 +1,4 @@
-var CENTRAL_HOSTPORT = "http://192.168.1.109:25340/"
+var CENTRAL_HOSTPORT = "http://128.237.196.59:25340/"
 
 function GameManager(size, InputManager, Actuator, StorageManager, ConnManager) {
   this.size           = size; // Size of the grid

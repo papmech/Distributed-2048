@@ -23,6 +23,7 @@ const (
 	LOG_TO_FILE bool = false
 	ERROR_LOG   bool = true
 	DEBUG_LOG   bool = false
+	MOVES_LOG   bool = false
 
 	REGISTER_RETRY_INTERVAL = 500
 	CLIENT_UPDATE_INTERVAL  = 500
@@ -120,12 +121,12 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		if err != nil {
 			panic(err)
 		}
+		movesOut, _ = os.Create(fmt.Sprintf("%d_moves_%s.log", reply.GameServerID, time.Now().String()))
 	} else {
 		vOut = os.Stdout
 		eOut = os.Stderr
-	}
 
-	movesOut, _ = os.Create(fmt.Sprintf("%d_moves_%s.log", reply.GameServerID, time.Now().String()))
+	}
 
 	gs := &gameServer{
 		reply.GameServerID,

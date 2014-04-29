@@ -17,7 +17,7 @@ import (
 
 const (
 	ERROR_LOG bool = true
-	DEBUG_LOG bool = true
+	DEBUG_LOG bool = false
 )
 
 var LOGV = util.NewLogger(DEBUG_LOG, "DEBUG", os.Stdout)
@@ -131,7 +131,7 @@ func (cs *centralServer) RegisterGameServer(args *centralrpc.RegisterGameServerA
 		reply.Servers = cs.gameServersSlice
 	}
 
-	fmt.Printf("Received registration request from %d, reply was %d\n", id, reply.Status)
+	LOGV.Printf("Received registration request from %d, reply was %d\n", id, reply.Status)
 
 	cs.gameServersLock.Unlock()
 

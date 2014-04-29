@@ -2,28 +2,32 @@ package main
 
 import (
 	"distributed2048/lib2048"
-	"distributed2048/rpc/paxosrpc"
 	"fmt"
 )
 
 func main() {
-	game, _ := lib2048.NewGame2048()
+	game := lib2048.NewGame2048()
+
+	r := game.GetRand()
+	for i := 0; i < 100; i++ {
+		fmt.Println(r.Int() % 4)
+	}
 
 	fmt.Println(game.String())
 
 	for !game.IsGameOver() {
 		var input string
 		fmt.Scanf("%s", &input)
-		var dir paxosrpc.Direction
+		var dir lib2048.Direction
 		switch input {
 		case "w":
-			dir = paxosrpc.Up
+			dir = lib2048.Up
 		case "a":
-			dir = paxosrpc.Left
+			dir = lib2048.Left
 		case "s":
-			dir = paxosrpc.Down
+			dir = lib2048.Down
 		case "d":
-			dir = paxosrpc.Right
+			dir = lib2048.Right
 		}
 		game.MakeMove(dir)
 		fmt.Println(game.String())

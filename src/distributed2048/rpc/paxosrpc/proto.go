@@ -24,7 +24,7 @@ type ReceivePrepareReply struct {
 	HasAcceptedProposal bool
 	AcceptedProposal    Proposal
 	DecidedSlotNumber   uint32
-	DecidedValue        []Move
+	DecidedValue        ProposalValue
 }
 
 type ReceiveAcceptArgs struct {

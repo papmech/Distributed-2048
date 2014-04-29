@@ -19,8 +19,10 @@ const (
 )
 
 const (
-	ERROR_LOG bool = false
-	DEBUG_LOG bool = false
+	ERROR_LOG          bool = false
+	DEBUG_LOG          bool = false
+	DUMP_SLOTS         bool = false
+	SHOW_DECIDED_SLOTS bool = false
 )
 
 var LOGV = util.NewLogger(DEBUG_LOG, "PAXOS|DEBUG", os.Stdout)
@@ -30,7 +32,7 @@ type libpaxos struct {
 	allNodes       []paxosrpc.Node
 	majorityCount  int // minimum number of nodes for a majority to be reached
 	myNode         paxosrpc.Node
-	decidedHandler func(uint32, []paxosrpc.Move) // called when decided value received after successful paxos round
+	decidedHandler func(*paxosrpc.ProposalValue) // called when decided value received after successful paxos round
 
 	nodesMutex sync.Mutex
 	nodes      map[uint32]*node
@@ -43,10 +45,12 @@ type libpaxos struct {
 	slotBoxMutex sync.Mutex // lock for slotBox
 
 	triggerHandlerCallCh chan struct{}
-	newValueCh           chan []paxosrpc.Move
+	newValueCh           chan *paxosrpc.ProposalValue
 
 	newValuesQueue     *list.List
 	newValuesQueueLock sync.Mutex
+
+	interruptFunc func(id uint32, action PaxosAction, slotNumber uint32)
 }
 
 func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libpaxos, error) {
@@ -55,7 +59,7 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 		majorityCount:             len(allNodes)/2 + 1,
 		myNode:                    paxosrpc.Node{nodeID, hostport},
 		nodes:                     make(map[uint32]*node),
-		newValueCh:                make(chan []paxosrpc.Move),
+		newValueCh:                make(chan *paxosrpc.ProposalValue),
 		highestProposalNumberSeen: &paxosrpc.ProposalNumber{0, nodeID},
 		slotBox:                   NewSlotBox(),
 		triggerHandlerCallCh:      make(chan struct{}, 1000),
@@ -77,19 +81,25 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 
 	go lp.controller()
 	go lp.handleCaller()
+	if DUMP_SLOTS {
+		go lp.dumpSlots()
+	}
 
 	return lp, nil
 }
 
-func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *paxosrpc.ReceivePrepareReply) error {
+func (lp *libpaxos) GetSlotBox() *SlotBox {
+	return lp.slotBox
+}
 
-	// TODO: Remove this
-	// Randomly simulate time out
-	// doTimeout := rand.Int()%100 < 3 // 20% of the time
-	// if doTimeout {
-	// 	LOGV.Println(lp.myNode.ID, "simulating 15 second interruption.")
-	// 	time.Sleep(15 * time.Second)
-	// }
+func (lp *libpaxos) SetInterruptFunc(f func(id uint32, action PaxosAction, slotNumber uint32)) {
+	lp.interruptFunc = f
+}
+
+func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *paxosrpc.ReceivePrepareReply) error {
+	if lp.interruptFunc != nil {
+		lp.interruptFunc(lp.myNode.ID, Prepare, lp.slotBox.nextUnknownSlotNumber)
+	}
 
 	lp.dataMutex.Lock()
 
@@ -103,7 +113,7 @@ func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *pax
 		// different slot number.
 		reply.Status = paxosrpc.DecidedValueExists
 		reply.DecidedSlotNumber = slot.Number
-		reply.DecidedValue = slot.Value
+		reply.DecidedValue = *slot.Value
 	} else if lp.highestProposalNumberSeen != nil && args.ProposalNumber.LessThan(lp.highestProposalNumberSeen) {
 		// If the proposal number is not highest, reject automatically.
 		reply.Status = paxosrpc.Reject
@@ -124,10 +134,22 @@ func (lp *libpaxos) ReceivePrepare(args *paxosrpc.ReceivePrepareArgs, reply *pax
 }
 
 func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxosrpc.ReceiveAcceptReply) error {
+	if lp.interruptFunc != nil {
+		lp.interruptFunc(lp.myNode.ID, Accept, lp.slotBox.nextUnknownSlotNumber)
+	}
 	lp.dataMutex.Lock()
 
+	lp.slotBoxMutex.Lock()
+	slot := lp.slotBox.Get(args.Proposal.CommandSlotNumber)
+	lp.slotBoxMutex.Unlock()
+
 	// Only accept a proposal if it has the highest proposal number so far.
-	if lp.highestAcceptedProposal != nil && args.Proposal.Number.LessThan(&lp.highestAcceptedProposal.Number) {
+	if args.Proposal.Number.LessThan(lp.highestProposalNumberSeen) {
+		reply.Status = paxosrpc.Reject
+	} else if lp.highestAcceptedProposal != nil && (args.Proposal.Number.LessThan(&lp.highestAcceptedProposal.Number)) {
+		reply.Status = paxosrpc.Reject
+	} else if slot != nil {
+		// Someone else already filled this slot!
 		reply.Status = paxosrpc.Reject
 	} else {
 		lp.highestAcceptedProposal = &args.Proposal
@@ -140,30 +162,33 @@ func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxos
 }
 
 func (lp *libpaxos) ReceiveDecide(args *paxosrpc.ReceiveDecideArgs, reply *paxosrpc.ReceiveDecideReply) error {
+	if lp.interruptFunc != nil {
+		lp.interruptFunc(lp.myNode.ID, Decide, lp.slotBox.nextUnknownSlotNumber)
+	}
 	lp.dataMutex.Lock()
-
-	// Reset the paxos state for the next round of paxos
-	lp.highestAcceptedProposal = nil
 
 	// Send the proposal to the slot box.
 	lp.slotBoxMutex.Lock()
-	lp.slotBox.Add(NewSlot(args.Proposal.CommandSlotNumber, args.Proposal.Value))
+	lp.slotBox.Add(NewSlot(args.Proposal.CommandSlotNumber, &args.Proposal.Value))
 	lp.slotBoxMutex.Unlock()
 
 	// Trigger the go routine which will check if any values can be sent to
 	// the handler.
 	lp.triggerHandlerCallCh <- struct{}{}
 
+	// Reset the paxos state for the next round of paxos
+	lp.highestAcceptedProposal = nil
+
 	lp.dataMutex.Unlock()
 	return nil
 }
 
-func (lp *libpaxos) Propose(moves []paxosrpc.Move) error {
-	lp.newValueCh <- moves
+func (lp *libpaxos) Propose(proposal *paxosrpc.ProposalValue) error {
+	lp.newValueCh <- proposal
 	return nil
 }
 
-func (lp *libpaxos) DecidedHandler(handler func(slotNumber uint32, moves []paxosrpc.Move)) {
+func (lp *libpaxos) DecidedHandler(handler func(proposal *paxosrpc.ProposalValue)) {
 	lp.decidedHandler = handler
 }
 
@@ -181,7 +206,10 @@ func (lp *libpaxos) handleCaller() {
 					break
 				}
 				if lp.decidedHandler != nil {
-					lp.decidedHandler(slot.Number, slot.Value)
+					if SHOW_DECIDED_SLOTS {
+						fmt.Println("Node", lp.myNode.ID, "got slot", slot.Number)
+					}
+					lp.decidedHandler(slot.Value)
 				}
 			}
 		}
@@ -199,21 +227,22 @@ func (lp *libpaxos) controller() {
 	doneCh := make(chan struct{})
 	for {
 		select {
-		case moves := <-lp.newValueCh:
+		case proposal := <-lp.newValueCh:
 			if proposalInProgress {
+				LOGV.Println("Proposal in progress, deferring")
 				lp.newValuesQueueLock.Lock()
-				lp.newValuesQueue.PushBack(moves)
+				lp.newValuesQueue.PushBack(proposal)
 				lp.newValuesQueueLock.Unlock()
 			} else {
 				proposalInProgress = true
-				go lp.doPropose(moves, doneCh)
+				go lp.doPropose(proposal, doneCh)
 			}
 		case <-doneCh:
 			lp.newValuesQueueLock.Lock()
 			if e := lp.newValuesQueue.Front(); e != nil {
 				lp.newValuesQueue.Remove(e)
-				moves := e.Value.([]paxosrpc.Move)
-				go lp.doPropose(moves, doneCh)
+				proposal := e.Value.(*paxosrpc.ProposalValue)
+				go lp.doPropose(proposal, doneCh)
 			} else {
 				proposalInProgress = false
 			}
@@ -226,13 +255,10 @@ func (lp *libpaxos) controller() {
 // with the given value. This may not always succeed because there will be
 // competing proposals, but when doPropose returns, it guarantees that the
 // value has been decided in a quorum.
-func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
+func (lp *libpaxos) doPropose(value *paxosrpc.ProposalValue, doneCh chan<- struct{}) {
+	LOGV.Println("doing propose")
 	done := false // true if $moves has been Decided, false otherwise.
 	for !done {
-		// TODO: Remove this
-		// Articifically stagger the proposers
-		// time.Sleep(time.Duration(rand.Int()%1000) * time.Millisecond)
-
 		retry := false // true if we should try again, for whatever reason, false otherwise.
 
 		// PHASE 1
@@ -241,7 +267,7 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 		// Make a new proposal such that my_n > n_h
 		lp.dataMutex.Lock()
 		lp.slotBoxMutex.Lock()
-		myProp := paxosrpc.NewProposal(lp.highestProposalNumberSeen.Number+1, lp.slotBox.GetNextUnknownSlotNumber(), lp.myNode.ID, moves)
+		myProp := paxosrpc.NewProposal(lp.highestProposalNumberSeen.Number+1, lp.slotBox.GetNextUnknownSlotNumber(), lp.myNode.ID, *value)
 		lp.highestProposalNumberSeen = &myProp.Number
 		lp.slotBoxMutex.Unlock()
 		lp.dataMutex.Unlock()
@@ -285,7 +311,7 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 			case paxosrpc.DecidedValueExists:
 				// Oops, better fill in that value
 				lp.slotBoxMutex.Lock()
-				lp.slotBox.Add(NewSlot(reply.DecidedSlotNumber, reply.DecidedValue))
+				lp.slotBox.Add(NewSlot(reply.DecidedSlotNumber, &reply.DecidedValue))
 				lp.slotBoxMutex.Unlock()
 
 				lp.triggerHandlerCallCh <- struct{}{}
@@ -342,6 +368,7 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 
 			timedOut, err := rpcCallWithTimeout(client, "PaxosNode.ReceiveAccept", args, &reply)
 			if err != nil {
+				LOGE.Println(err)
 				node.Client = nil // so it will try to redial in future attempts
 				continue          // skip nodes that are unreachable
 			} else if timedOut {
@@ -350,16 +377,22 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 
 			if reply.Status == paxosrpc.OK {
 				acceptedCount++
+			} else {
+				LOGV.Println("Node", node.Info.ID, "rejected my Accept message with status", reply.Status)
 			} // do nothing if REJECTED
 		}
 		lp.nodesMutex.Unlock()
 
 		// Got majority?
 		if acceptedCount < lp.majorityCount {
-			// TODO: do I nil-out the lp.highestAcceptedProposal etc?
-			// TODO: add backoff
+			LOGV.Println("Couldn't get majority for PHASE 2,", acceptedCount, "/", lp.majorityCount)
+			// Backoff
+			num := time.Duration(rand.Int()%100 + 25)
+			time.Sleep(num * time.Millisecond)
 			continue // try again
 		}
+
+		LOGV.Printf("%d got majority (%d/%d) on ACCEPT for slot %d, seqnum is %s, value is\n%s\n", lp.myNode.ID, acceptedCount, lp.majorityCount, propToAccept.CommandSlotNumber, propToAccept.Number.String(), util.MovesString(propToAccept.Value.Moves))
 
 		// Send <decide, va> to all nodes
 		lp.nodesMutex.Lock()
@@ -378,12 +411,9 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 
 			rpcCallWithTimeout(client, "PaxosNode.ReceiveDecide", args, &reply)
 			// We don't care if that rpc call had an error or timed out
-
-			// err := client.Call("PaxosNode.ReceiveDecide", args, &reply)
-			// if err != nil {
-			// 	continue // skip nodes that are unreachable
-			// }
 		}
+
+		LOGV.Printf("%d decided on slot %d, seqnum is %s, value is\n%s\n", lp.myNode.ID, propToAccept.CommandSlotNumber, propToAccept.Number.String(), util.MovesString(propToAccept.Value.Moves))
 		lp.nodesMutex.Unlock()
 
 		lp.dataMutex.Lock()
@@ -391,15 +421,16 @@ func (lp *libpaxos) doPropose(moves []paxosrpc.Move, doneCh chan<- struct{}) {
 		lp.dataMutex.Unlock()
 
 		lp.slotBoxMutex.Lock()
-		lp.slotBox.Add(NewSlot(propToAccept.CommandSlotNumber, propToAccept.Value))
+		lp.slotBox.Add(NewSlot(propToAccept.CommandSlotNumber, &propToAccept.Value))
 		lp.slotBoxMutex.Unlock()
+
 		lp.triggerHandlerCallCh <- struct{}{}
 
 		if propToAccept.Number.Equal(&myProp.Number) {
 			done = true
 		}
 	}
-
+	LOGV.Println("Done propose")
 	doneCh <- struct{}{}
 }
 
@@ -413,4 +444,20 @@ func rpcCallWithTimeout(client *rpc.Client, serviceMethod string, args, reply in
 		return true, nil
 	}
 	return false, nil
+}
+
+// dumpSlots writes the
+func (lp *libpaxos) dumpSlots() {
+	ticker := time.NewTicker(5 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+
+			file, _ := os.Create(fmt.Sprintf("%d_slots_%s.log", lp.myNode.ID, time.Now().String()))
+			lp.slotBoxMutex.Lock()
+			file.WriteString(lp.slotBox.String())
+			lp.slotBoxMutex.Unlock()
+			file.Close()
+		}
+	}
 }

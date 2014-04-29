@@ -3,36 +3,29 @@
 package lib2048
 
 import (
-	"distributed2048/rpc/paxosrpc"
+	"distributed2048/libsimplerand"
 	"fmt"
-	"math/rand"
 )
 
 type Grid [BoardLen][BoardLen]int
-var r = rand.New(rand.NewSource(15440))
 
 type game struct {
-	grid    Grid
-	score   int
-	history []paxosrpc.Direction
+	grid  Grid
+	score int
+	r     *libsimplerand.SimpleRand
 }
 
 func NewGame2048() Game2048 {
 	g := &game{
-		score:   0,
-		history: make([]paxosrpc.Direction, 0),
+		score: 0,
+		r:     libsimplerand.NewSimpleRand(15440),
 	}
 	g.reset()
 	g.newRound(InitialTileCount)
 	return g
 }
 
-func (g *game) SetGameState(state Grid, newscore int) {
-	g.grid = state
-	g.score = newscore
-}
-
-func (g *game) MakeMove(dir paxosrpc.Direction) {
+func (g *game) MakeMove(dir Direction) {
 	if !g.canMove() {
 		return
 	}
@@ -44,7 +37,6 @@ func (g *game) MakeMove(dir paxosrpc.Direction) {
 		g.newRound(EachTurnNewTileCount)
 	}
 
-	g.history = append(g.history, dir)
 }
 
 func (g *game) GetScore() int {
@@ -53,6 +45,10 @@ func (g *game) GetScore() int {
 
 func (g *game) GetBoard() Grid {
 	return g.grid
+}
+
+func (g *game) GetRand() *libsimplerand.SimpleRand {
+	return g.r
 }
 
 func (g *game) IsGameOver() bool {
@@ -71,7 +67,49 @@ func (g *game) String() string {
 		}
 		result += "\n"
 	}
+	result += fmt.Sprintf("Score: %d\n", g.score)
 	return result
+}
+
+func (g *game) Equals(other Game2048) bool {
+	// Check that the grids are equal
+	otherGrid := other.GetBoard()
+	for row := 0; row < BoardLen; row++ {
+		for col := 0; col < BoardLen; col++ {
+			if g.grid[row][col] != otherGrid[row][col] {
+				return false
+			}
+		}
+	}
+
+	// Check that the scores are equal
+	if g.GetScore() != other.GetScore() {
+		return false
+	}
+	return true
+}
+
+func (g *game) SetGrid(grid Grid) {
+	for row := 0; row < BoardLen; row++ {
+		for col := 0; col < BoardLen; col++ {
+			g.grid[row][col] = grid[row][col]
+		}
+	}
+}
+
+func (g *game) SetScore(score int) {
+	g.score = score
+}
+
+func (g *game) CloneFrom(other Game2048) {
+	otherGrid := other.GetBoard()
+	for row := 0; row < BoardLen; row++ {
+		for col := 0; col < BoardLen; col++ {
+			g.grid[row][col] = otherGrid[row][col]
+		}
+	}
+	g.score = other.GetScore()
+	g.r = other.GetRand()
 }
 
 func (g *game) newRound(numNewTiles int) {
@@ -81,7 +119,7 @@ func (g *game) newRound(numNewTiles int) {
 			return // Board full
 		}
 		g.grid[y][x] = FirstTileValue
-		if shouldInitialValueBeDouble() {
+		if g.shouldInitialValueBeDouble() {
 			g.grid[y][x] = FirstTileValue * 2
 		}
 	}
@@ -167,10 +205,10 @@ func (g *game) getLargest() int {
 	return largest
 }
 
-func (g *game) move(dir paxosrpc.Direction) bool {
+func (g *game) move(dir Direction) bool {
 	hasMovement := false
 	switch dir {
-	case paxosrpc.Down:
+	case Down:
 		for x := 0; x < BoardLen; x++ {
 			for y := BoardLen - 1; y >= 0; y-- {
 				// Don't move empty spaces
@@ -193,7 +231,7 @@ func (g *game) move(dir paxosrpc.Direction) bool {
 				g.grid[newY][x] = value
 			}
 		}
-	case paxosrpc.Up:
+	case Up:
 		for x := 0; x < BoardLen; x++ {
 			for y := 0; y < BoardLen; y++ {
 				// Don't move empty spaces
@@ -216,7 +254,7 @@ func (g *game) move(dir paxosrpc.Direction) bool {
 				g.grid[newY][x] = value
 			}
 		}
-	case paxosrpc.Left:
+	case Left:
 		for x := 0; x < BoardLen; x++ {
 			for y := 0; y < BoardLen; y++ {
 				// Don't move empty spaces
@@ -238,7 +276,7 @@ func (g *game) move(dir paxosrpc.Direction) bool {
 				g.grid[y][newX] = value
 			}
 		}
-	case paxosrpc.Right:
+	case Right:
 		for x := BoardLen - 1; x >= 0; x-- {
 			for y := 0; y < BoardLen; y++ {
 				// Don't move empty spaces
@@ -265,11 +303,11 @@ func (g *game) move(dir paxosrpc.Direction) bool {
 }
 
 // Goes through and merges in that direction
-func (g *game) merge(dir paxosrpc.Direction) bool {
+func (g *game) merge(dir Direction) bool {
 	merging := false
 
 	switch dir {
-	case paxosrpc.Down:
+	case Down:
 		for x := 0; x < BoardLen; x++ {
 			for y := BoardLen - 1; y >= 0; y-- {
 				// Empty slots dont merge
@@ -294,7 +332,7 @@ func (g *game) merge(dir paxosrpc.Direction) bool {
 		}
 
 		return merging
-	case paxosrpc.Up:
+	case Up:
 		for x := 0; x < BoardLen; x++ {
 			for y := 0; y < BoardLen; y++ {
 				// Empty slots dont merge
@@ -320,7 +358,7 @@ func (g *game) merge(dir paxosrpc.Direction) bool {
 		}
 
 		return merging
-	case paxosrpc.Left:
+	case Left:
 		for x := 0; x < BoardLen; x++ {
 			for y := 0; y < BoardLen; y++ {
 				// Empty slots dont merge
@@ -346,7 +384,7 @@ func (g *game) merge(dir paxosrpc.Direction) bool {
 		}
 
 		return merging
-	case paxosrpc.Right:
+	case Right:
 		for x := BoardLen - 1; x >= 0; x-- {
 			for y := 0; y < BoardLen; y++ {
 				// Empty slots dont merge
@@ -382,17 +420,17 @@ func (g *game) randomEmptyPos() (int, int) {
 	if !g.hasEmpty() {
 		return -1, -1
 	}
-	x, y := randPos(), randPos()
+	x, y := g.randPos(), g.randPos()
 	for g.grid[y][x] != 0 {
-		x, y = randPos(), randPos()
+		x, y = g.randPos(), g.randPos()
 	}
 	return y, x
 }
 
-func randPos() int {
-	return r.Int() % BoardLen
+func (g *game) randPos() int {
+	return g.r.Int() % BoardLen
 }
 
-func shouldInitialValueBeDouble() bool {
-	return r.Int()%100 < InitialTileDoublePercent
+func (g *game) shouldInitialValueBeDouble() bool {
+	return g.r.Int()%100 < InitialTileDoublePercent
 }

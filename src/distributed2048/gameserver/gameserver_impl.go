@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"log"
 	"net/http"
 	"net/rpc"
 	"os"
@@ -20,15 +20,13 @@ import (
 )
 
 const (
-	ERROR_LOG bool = true
-	DEBUG_LOG bool = true
+	LOG_TO_FILE bool = false
+	ERROR_LOG   bool = true
+	DEBUG_LOG   bool = false
 
 	REGISTER_RETRY_INTERVAL = 500
 	CLIENT_UPDATE_INTERVAL  = 500
 )
-
-var LOGV = util.NewLogger(DEBUG_LOG, "DEBUG", os.Stdout)
-var LOGE = util.NewLogger(ERROR_LOG, "ERROR", os.Stderr)
 
 type client struct {
 	id   int
@@ -49,16 +47,21 @@ type gameServer struct {
 	clients      map[int]*client
 	addCh        chan *client
 	delCh        chan *client
-	doneCh     chan bool
-	errCh      chan error
-	numClients int
+	doneCh       chan bool
+	errCh        chan error
+	numClients   int
 
-	newMovesCh          chan []paxosrpc.Move
+	newMovesCh          chan *paxosrpc.ProposalValue
 	totalNumGameServers int
 	game2048            lib2048.Game2048
 	stateBroadcastCh    chan *util.Game2048State
-	clientMoveCh        chan *paxosrpc.Move
+	clientMoveCh        chan *lib2048.Move
+
+	LOGV *log.Logger
+	LOGE *log.Logger
 }
+
+var movesOut *os.File
 
 // NewGameServer creates an instance of a Game Server. It does not return
 // until it has successfully joined the cluster of game servers.
@@ -66,8 +69,8 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	// Register with the central server
 	c, err := rpc.DialHTTP("tcp", centralServerHostPort)
 	if err != nil {
-		LOGE.Println("Could not connect to central server host port via RPC")
-		LOGE.Println(err)
+		fmt.Println("Could not connect to central server host port via RPC")
+		fmt.Println(err)
 		return nil, err
 	}
 	gshostport := fmt.Sprintf("%s:%d", hostname, port)
@@ -77,8 +80,8 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	for reply.Status != centralrpc.OK {
 		err = c.Call("CentralServer.RegisterGameServer", args, &reply)
 		if err != nil {
-			LOGE.Println("Could not RPC call method CentralServer.RegisterGameServer")
-			LOGE.Println(err)
+			fmt.Println("Could not RPC call method CentralServer.RegisterGameServer")
+			fmt.Println(err)
 			return nil, err
 		}
 		if reply.Status == centralrpc.Full {
@@ -86,13 +89,13 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		}
 		time.Sleep(REGISTER_RETRY_INTERVAL * time.Millisecond)
 	}
-	LOGV.Printf("GS node %d finished registration with CS\n", reply.GameServerID)
+	// gs.LOGV.Printf("GS node %d finished registration with CS\n", reply.GameServerID)
 
 	newlibpaxos, err := libpaxos.NewLibpaxos(reply.GameServerID, gshostport, reply.Servers)
 
 	if err != nil {
-		LOGE.Println("Could not start libpaxos")
-		LOGE.Println(err)
+		fmt.Println("Could not start libpaxos")
+		fmt.Println(err)
 		return nil, err
 	}
 
@@ -103,6 +106,26 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	//	sendAllCh := make(chan *Message)
 	doneCh := make(chan bool)
 	errCh := make(chan error)
+
+	var vOut io.Writer
+	var eOut io.Writer
+	if LOG_TO_FILE {
+		now := time.Now().String()
+		var err error
+		vOut, err = os.Create(fmt.Sprintf("%d_debug_%s.log", reply.GameServerID, now))
+		if err != nil {
+			panic(err)
+		}
+		eOut, err = os.Create(fmt.Sprintf("%d_error_%s.log", reply.GameServerID, now))
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		vOut = os.Stdout
+		eOut = os.Stderr
+	}
+
+	movesOut, _ = os.Create(fmt.Sprintf("%d_moves_%s.log", reply.GameServerID, time.Now().String()))
 
 	gs := &gameServer{
 		reply.GameServerID,
@@ -118,14 +141,16 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 		doneCh,
 		errCh,
 		0,
-		make(chan []paxosrpc.Move, 1000),
+		make(chan *paxosrpc.ProposalValue, 1000),
 		len(reply.Servers),
 		lib2048.NewGame2048(), // TODO: Use paxos to agree on game state
 		make(chan *util.Game2048State, 1000),
-		make(chan *paxosrpc.Move, 1000),
+		make(chan *lib2048.Move, 1000),
+		util.NewLogger(DEBUG_LOG, "DEBUG", vOut),
+		util.NewLogger(ERROR_LOG, "ERROR", eOut),
 	}
 	gs.libpaxos.DecidedHandler(gs.handleDecided)
-	LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
+	gs.LOGV.Printf("GS node %d loaded libpaxos\n", reply.GameServerID)
 
 	go gs.ListenForClients()
 	go gs.processMoves()
@@ -136,54 +161,12 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 	return gs, nil
 }
 
-// TODO: Remove this
-// horseShit exists purely to test Paxos. At random
-// intervals, it generates a random number of moves to be sent via Paxos.
-func (gs *gameServer) horseShit() {
-	time.Sleep(3 * time.Second)
-	minMoves, maxMoves := 5, 20
-	minSleep, maxSleep := 100, 400
-
-	for {
-		time.Sleep(time.Duration(rand.Intn(maxSleep-minSleep)+minSleep) * time.Millisecond)
-		moves := make([]paxosrpc.Move, 0)
-		numMoves := rand.Intn(maxMoves - minMoves)
-		for i := 0; i < numMoves; i++ {
-			moves = append(moves, *util.RandomMove())
-		}
-		gs.libpaxos.Propose(moves)
-	}
-}
-
-func (gs *gameServer) handleDecided(slotNumber uint32, moves []paxosrpc.Move) {
-	LOGV.Println("GAME SERVER", gs.id, "got slot", slotNumber)
-
-	gs.newMovesCh <- moves
-
-	// TODO remove the slotNumber since only libpaxos needs it
-
-	// Send the move to the 2048 go routine, which will update itself
-}
-
-func (gs *gameServer) clientMasterHandler() {
-	ticker := time.NewTicker(500 * time.Millisecond) // send proposals every interval
-	moves := make([]paxosrpc.Move, 0)
-	for {
-		select {
-		case move := <-gs.clientMoveCh:
-			moves = append(moves, *move)
-		case <-ticker.C:
-			if len(moves) > 0 {
-				gs.libpaxos.Propose(moves)
-				moves = make([]paxosrpc.Move, 0)
-			}
-		}
-	}
+func (gs *gameServer) GetLibpaxos() libpaxos.Libpaxos {
+	return gs.libpaxos
 }
 
 func (gs *gameServer) clientListenRead(ws *websocket.Conn) {
 	defer func() {
-		LOGV.Println("I'm hauling ass")
 		ws.Close()
 	}()
 
@@ -196,34 +179,65 @@ func (gs *gameServer) clientListenRead(ws *websocket.Conn) {
 				return
 				// EOF!
 			} else if err != nil {
-				LOGE.Println(err)
+				gs.LOGE.Println(err)
 			} else {
-				var dir paxosrpc.Direction
+				var dir lib2048.Direction
 				switch move.Direction {
 				case 0:
-					dir = paxosrpc.Up
+					dir = lib2048.Up
 				case 1:
-					dir = paxosrpc.Right
+					dir = lib2048.Right
 				case 2:
-					dir = paxosrpc.Down
+					dir = lib2048.Down
 				case 3:
-					dir = paxosrpc.Left
+					dir = lib2048.Left
 				}
-				LOGV.Println("Received", dir, "from web client")
-				move := paxosrpc.NewMove(dir)
+				gs.LOGV.Println("Received", dir, "from web client")
+				move := lib2048.NewMove(dir)
 				gs.clientMoveCh <- move
 			}
 		}
 	}
 }
 
+func (gs *gameServer) clientMasterHandler() {
+	ticker := time.NewTicker(500 * time.Millisecond) // send proposals every interval
+	moves := make([]lib2048.Move, 0)
+	for {
+		select {
+		case move := <-gs.clientMoveCh:
+			moves = append(moves, *move)
+		case <-ticker.C:
+			if len(moves) > 0 {
+				gs.libpaxos.Propose(&paxosrpc.ProposalValue{moves, *paxosrpc.NewGameData(gs.game2048)})
+				moves = make([]lib2048.Move, 0)
+			}
+		}
+	}
+}
+
+func (gs *gameServer) handleDecided(proposalValue *paxosrpc.ProposalValue) {
+	gs.LOGV.Println(gs.id, "obtained decided proposal.")
+	gs.newMovesCh <- proposalValue
+}
+
 func (gs *gameServer) processMoves() {
 	sizeQueue := make([]int, 0)
-	pendingMoves := make([]paxosrpc.Move, 0)
+	pendingMoves := make([]lib2048.Move, 0)
 	currentBucketSize := 0
 	for {
 		select {
-		case moves := <-gs.newMovesCh:
+		case proposal := <-gs.newMovesCh:
+			_, moves := proposal.Game, proposal.Moves
+
+			// Reset the game state to the received state
+			// game.CopyInto(gs.game2048)
+
+			// Log the shit to file
+			io.WriteString(movesOut, "-------------------------------------\n")
+			io.WriteString(movesOut, util.MovesString(moves))
+			io.WriteString(movesOut, "\n")
+
 			pendingMoves = append(pendingMoves, moves...)
 			if currentBucketSize == 0 {
 				currentBucketSize = len(moves)
@@ -234,21 +248,21 @@ func (gs *gameServer) processMoves() {
 			requiredMoves := currentBucketSize * gs.totalNumGameServers
 			if len(pendingMoves) >= requiredMoves {
 				// Find the majority of the first $requiredMoves moves
-				dirVotes := make(map[paxosrpc.Direction]int)
-				dirVotes[paxosrpc.Up] = 0
-				dirVotes[paxosrpc.Down] = 0
-				dirVotes[paxosrpc.Left] = 0
-				dirVotes[paxosrpc.Right] = 0
+				dirVotes := make(map[lib2048.Direction]int)
+				dirVotes[lib2048.Up] = 0
+				dirVotes[lib2048.Down] = 0
+				dirVotes[lib2048.Left] = 0
+				dirVotes[lib2048.Right] = 0
 				pendingMovesSubset := pendingMoves[:requiredMoves]
 				pendingMoves = pendingMoves[requiredMoves:]
 				for _, move := range pendingMovesSubset {
 					dirVotes[move.Direction]++
 				}
 
-				LOGV.Println("GAME SERVER", gs.id, "currentBucketSize", currentBucketSize)
-				LOGV.Println("GAME SERVER", gs.id, "pendingMovesSubset", util.MovesString(pendingMovesSubset))
+				gs.LOGV.Println("GAME SERVER", gs.id, "currentBucketSize", currentBucketSize)
+				gs.LOGV.Println("GAME SERVER", gs.id, "pendingMovesSubset", util.MovesString(pendingMovesSubset))
 
-				var majorityDir paxosrpc.Direction
+				var majorityDir lib2048.Direction
 				maxVotes := 0
 				for dir, votes := range dirVotes {
 					if votes > maxVotes {
@@ -259,17 +273,12 @@ func (gs *gameServer) processMoves() {
 					}
 				}
 
-				LOGV.Println("GAME SERVER", gs.id, "got majority direction:", majorityDir)
+				gs.LOGV.Println("GAME SERVER", gs.id, "got majority direction:", majorityDir)
 
 				// Update the 2048 state
 				gs.game2048.MakeMove(majorityDir)
 
-				state := &util.Game2048State{
-					Won:   gs.game2048.IsGameWon(),
-					Over:  gs.game2048.IsGameOver(),
-					Grid:  gs.game2048.GetBoard(),
-					Score: gs.game2048.GetScore(),
-				}
+				state := gs.getWrappedState()
 
 				gs.stateBroadcastCh <- state
 
@@ -289,13 +298,13 @@ func (gs *gameServer) clientTasker() {
 		select {
 		case state := <-gs.stateBroadcastCh:
 			buf, _ := json.Marshal(*state)
-			LOGV.Println("GAME SERVER", gs.id, "sendin to client:", string(buf))
+			gs.LOGV.Printf("GAME SERVER %d sending to client\n%s\n", gs.id, state.String())
 			gs.clientsMutex.Lock()
 			for _, c := range gs.clients {
-				LOGV.Println("GOTS")
+				// gs.LOGV.Println("GOTS")
 				err := websocket.Message.Send(c.conn, string(buf))
 				if err != nil {
-					LOGE.Println(err)
+					gs.LOGE.Println(err)
 				}
 			}
 			gs.clientsMutex.Unlock()
@@ -304,43 +313,55 @@ func (gs *gameServer) clientTasker() {
 }
 
 func (gs *gameServer) ListenForClients() {
-	LOGV.Println("Listening for connection from new clients")
+	gs.LOGV.Println("Listening for connection from new clients")
 
 	// websocket handler
 	onConnected := func(ws *websocket.Conn) {
-		LOGV.Println("Client has connected")
+		gs.LOGV.Println("Client has connected")
+
 		// client has been connected: add the client to the list
 		gs.clientsMutex.Lock()
 		c := &client{gs.numClients, ws}
 		gs.clients[gs.numClients] = c
+		id := gs.numClients
+
+		// Remove from map when dead
+		defer func() {
+			gs.LOGV.Println("Lost connection to client", id)
+			gs.clientsMutex.Lock()
+			delete(gs.clients, id)
+			gs.clientsMutex.Unlock()
+		}()
+
 		gs.numClients += 1
 		gs.clientsMutex.Unlock()
-		state := &util.Game2048State{
-			Won:   gs.game2048.IsGameWon(),
-			Over:  gs.game2048.IsGameOver(),
-			Grid:  gs.game2048.GetBoard(),
-			Score: gs.game2048.GetScore(),
+
+		// Send it the state
+		state := gs.getWrappedState()
+		buf, _ := json.Marshal(*state)
+		err := websocket.Message.Send(ws, string(buf))
+		if err != nil {
+			gs.LOGE.Println(err)
 		}
-		gs.stateBroadcastCh <- state
+
 		gs.clientListenRead(ws)
 	}
 	http.Handle(gs.pattern, websocket.Handler(onConnected))
 
 	for {
-		select {
-		}
+		select {}
 	}
 }
 
-func (gs *gameServer) TestAddVote(moves []paxosrpc.Move) {
-	gs.libpaxos.Propose(moves)
+func (gs *gameServer) TestAddVote(moves []lib2048.Move) {
+	gs.libpaxos.Propose(&paxosrpc.ProposalValue{moves, *paxosrpc.NewGameData(gs.game2048)})
 }
 
-func (gs *gameServer) handleNewMoveList() {
-	for {
-		select {
-		case moves := <-gs.newMovesCh:
-			LOGV.Println(moves)
-		}
+func (gs *gameServer) getWrappedState() *util.Game2048State {
+	return &util.Game2048State{
+		Won:   gs.game2048.IsGameWon(),
+		Over:  gs.game2048.IsGameOver(),
+		Grid:  gs.game2048.GetBoard(),
+		Score: gs.game2048.GetScore(),
 	}
 }

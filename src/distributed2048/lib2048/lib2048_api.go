@@ -3,7 +3,7 @@
 package lib2048
 
 import (
-	"distributed2048/rpc/paxosrpc"
+	"distributed2048/libsimplerand"
 )
 
 const (
@@ -15,11 +15,15 @@ const (
 )
 
 type Game2048 interface {
-	MakeMove(dir paxosrpc.Direction)
+	MakeMove(dir Direction)
 	GetScore() int
 	GetBoard() Grid
+	GetRand() *libsimplerand.SimpleRand
 	IsGameOver() bool
 	IsGameWon() bool
 	String() string
-	SetGameState(state Grid, newscore int)
+	Equals(game Game2048) bool
+	SetGrid(grid Grid)
+	SetScore(score int)
+	CloneFrom(game Game2048)
 }

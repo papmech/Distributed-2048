@@ -1,4 +1,4 @@
-package paxosrpc
+package lib2048
 
 import (
 	"fmt"

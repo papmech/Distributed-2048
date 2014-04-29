@@ -3,10 +3,10 @@
 package gameserver
 
 import (
-	"distributed2048/rpc/paxosrpc"
+	"distributed2048/libpaxos"
 )
 
 type GameServer interface {
-	TestAddVote(moves []paxosrpc.Move)
 	ListenForClients()
+	GetLibpaxos() libpaxos.Libpaxos
 }

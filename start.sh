@@ -15,6 +15,7 @@ fi
 CENTRAL_SERVER_PKG="distributed2048/runners/cservrunner"
 GAME_SERVER_PKG="distributed2048/runners/grunner"
 CLIENT_SERVER_PKG="distributed2048/runners/crunner"
+CENTRAL_HOSTNAME=localhost
 CENTRAL_PORT=25340
 GAME_SERVER_PORT=15551
 NUM_GAME_SERVERS=$1
@@ -56,7 +57,7 @@ do
     # Pick random ports between [10000, 20000).
     GAME_SERVER_PORT=$(($FIRST_PORT + $i))
     echo "SCRIPT STARTING GAME SERVER ON PORT ${GAME_SERVER_PORT}"
-    ${GAME_SERVER} -port=${GAME_SERVER_PORT} -central=${HOSTNAME}:${CENTRAL_PORT} &
+    ${GAME_SERVER} -port=${GAME_SERVER_PORT} -central=${CENTRAL_HOSTNAME}:${CENTRAL_PORT} -hostname=${HOSTNAME} &
     GAME_SERVER_PID[$i]=$!
     sleep 1
 done

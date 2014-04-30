@@ -79,10 +79,21 @@ func doConnect(cservAddr string, gameServHostPort string) (*websocket.Conn, erro
 			isReady = unpacked.Status == "OK"
 			if isReady {
 				hostport = unpacked.Hostport
+				gameServHostPort = hostport
+				// Connect to the server
+				origin := "http://localhost/"
+				url := "ws://" + gameServHostPort + "/abc"
+				ws, err := websocket.Dial(url, "", origin)
+				if err != nil {
+					LOGV.Println("Could not open websocket connection to server")
+					isReady = false
+				} else {
+					LOGE.Println("Connection has been established with server " + gameServHostPort)
+					return ws, nil
+				}
 			}
 			time.Sleep(250 * time.Millisecond)
 		}
-		gameServHostPort = hostport
 	}
 
 	// Connect to the server
@@ -94,9 +105,8 @@ func doConnect(cservAddr string, gameServHostPort string) (*websocket.Conn, erro
 		return nil, err
 	} else {
 		LOGE.Println("Connection has been established with server " + gameServHostPort)
+		return ws, nil
 	}
-
-	return ws, nil
 }
 
 // Ticker Function
@@ -151,13 +161,13 @@ func (c *cclient) GetGameState() lib2048.Game2048 {
 func (c *cclient) sender() (chan<- util.ClientMove, chan error) {
 	ch, errCh := make(chan util.ClientMove), make(chan error)
 	go func() {
+		defer LOGV.Println("sender has died")
 		for {
 			select {
 			case <-c.stopsender:
 				close(ch)
 				return
-			default:
-				s := <-ch
+			case s := <-ch:
 				if err := websocket.JSON.Send(c.conn, s); err != nil {
 					errCh <- err
 					close(ch)
@@ -172,6 +182,7 @@ func (c *cclient) sender() (chan<- util.ClientMove, chan error) {
 func (c *cclient) receiver() (<-chan []byte, chan error) {
 	ch, errCh := make(chan []byte), make(chan error)
 	go func() {
+		defer LOGV.Println("receiver has died")
 		for {
 			select {
 			case <-c.stopreceiver:
@@ -210,8 +221,10 @@ func (c *cclient) websocketHandler() {
 			c.game.SetScore(newState.Score)
 		case err := <-sendErr:
 			LOGE.Println("Communication error with server while sending move: " + err.Error())
-			<-c.stopreceiver
+			c.stopreceiver <- 1
+			LOGE.Println("Attempting Reconnect")
 			ws, err := doConnect(c.cserv, "")
+			LOGE.Println("Reconnect complete")
 			if err != nil {
 				LOGE.Println("Unable to reconnect to server. Shutting down..")
 				go c.Close()
@@ -221,8 +234,11 @@ func (c *cclient) websocketHandler() {
 			recv, recvErr = c.receiver()
 		case err := <-recvErr:
 			LOGE.Println("Communication error with server while receiving state")
-			<-c.stopsender
+			c.stopsender <- 1
+			LOGE.Println("Attempting Reconnect")
 			ws, err := doConnect(c.cserv, "")
+			LOGE.Println("Reconnect complete")
+
 			if err != nil {
 				LOGE.Println("Unable to reconnect to server. Shutting down..")
 				go c.Close()

@@ -268,7 +268,7 @@ func (gs *gameServer) processMoves() {
 					gs.game2048 = lib2048.NewGame2048()
 				}
 
-				state := gs.getWrappedState()
+				state := gs.getWrappedState(&majorityDir)
 
 				gs.stateBroadcastCh <- state
 
@@ -327,7 +327,7 @@ func (gs *gameServer) ListenForClients() {
 		gs.clientsMutex.Unlock()
 
 		// Send it the state
-		state := gs.getWrappedState()
+		state := gs.getWrappedState(nil)
 		buf, _ := json.Marshal(*state)
 		err := websocket.Message.Send(ws, string(buf))
 		if err != nil {
@@ -343,11 +343,26 @@ func (gs *gameServer) TestAddVote(moves []lib2048.Move) {
 	gs.libpaxos.Propose(&paxosrpc.ProposalValue{moves})
 }
 
-func (gs *gameServer) getWrappedState() *util.Game2048State {
+func (gs *gameServer) getWrappedState(dir *lib2048.Direction) *util.Game2048State {
+	tomove := ""
+	if dir != nil {
+		move := *dir
+		switch (move) {
+		case lib2048.Left:
+			tomove = "Left"
+		case lib2048.Up:
+			tomove = "Up"
+		case lib2048.Down:
+			tomove = "Down"
+		case lib2048.Right:
+			tomove = "Right"
+		}
+	}
 	return &util.Game2048State{
 		Won:   gs.game2048.IsGameWon(),
 		Over:  gs.game2048.IsGameOver(),
 		Grid:  gs.game2048.GetBoard(),
 		Score: gs.game2048.GetScore(),
+		Consensus: tomove,
 	}
 }

@@ -1,4 +1,4 @@
-var CENTRAL_HOSTPORT = "http://128.237.196.59:25340/"
+var CENTRAL_HOSTPORT = "http://localhost:25340/"
 
 function GameManager(size, InputManager, Actuator, StorageManager, ConnManager) {
   this.size           = size; // Size of the grid
@@ -17,12 +17,8 @@ function GameManager(size, InputManager, Actuator, StorageManager, ConnManager) 
   this.connManager.on("connectionMade", this.setup.bind(this));
   this.connManager.on("update", this.update.bind(this));
 
-  var xmlHttp = null;
-  xmlHttp = new XMLHttpRequest();
-//  xmlHttp.open( "GET", "http://128.237.201.5:25340", false );
-  xmlHttp.open( "GET", CENTRAL_HOSTPORT, false );
-  xmlHttp.send( null );
-  this.connManager.getConnectionFromCServ(xmlHttp.responseText, null)
+
+  this.connManager.getConnectionFromCServ()
 }
 
 // Restart the game

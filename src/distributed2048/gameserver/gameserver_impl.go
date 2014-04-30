@@ -25,7 +25,7 @@ const (
 	DEBUG_LOG   bool = false
 
 	REGISTER_RETRY_INTERVAL = 500
-	CLIENT_UPDATE_INTERVAL  = 500
+	CLIENT_UPDATE_INTERVAL  = 350
 )
 
 var LOGV, LOGE *log.Logger
@@ -148,7 +148,6 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 
 	go gs.ListenForClients()
 	go gs.processMoves()
-	// go gs.horseShit()
 	go gs.clientTasker()
 	go gs.clientMasterHandler()
 
@@ -195,7 +194,7 @@ func (gs *gameServer) clientListenRead(ws *websocket.Conn) {
 }
 
 func (gs *gameServer) clientMasterHandler() {
-	ticker := time.NewTicker(500 * time.Millisecond) // send proposals every interval
+	ticker := time.NewTicker(CLIENT_UPDATE_INTERVAL * time.Millisecond) // send proposals every interval
 	moves := make([]lib2048.Move, 0)
 	for {
 		select {
@@ -265,6 +264,9 @@ func (gs *gameServer) processMoves() {
 
 				// Update the 2048 state
 				gs.game2048.MakeMove(majorityDir)
+				if gs.game2048.IsGameOver() {
+					gs.game2048 = lib2048.NewGame2048()
+				}
 
 				state := gs.getWrappedState()
 

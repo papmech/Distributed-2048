@@ -23,7 +23,7 @@ function KeyboardInputManager() {
         self.moveStack = [];
         self.emit("move", lastMove);
     }
-  }, 1000);
+  }, 100);
 }
 
 KeyboardInputManager.prototype.on = function (event, callback) {
@@ -81,11 +81,6 @@ KeyboardInputManager.prototype.listen = function () {
       self.restart.call(self, event);
     }
   });
-
-  // Respond to button presses
-  this.bindButtonPress(".retry-button", this.restart);
-  this.bindButtonPress(".restart-button", this.restart);
-  this.bindButtonPress(".keep-playing-button", this.keepPlaying);
 
   // Respond to swipe events
   var touchStartClientX, touchStartClientY;
@@ -149,10 +144,4 @@ KeyboardInputManager.prototype.restart = function (event) {
 KeyboardInputManager.prototype.keepPlaying = function (event) {
   event.preventDefault();
   this.emit("keepPlaying");
-};
-
-KeyboardInputManager.prototype.bindButtonPress = function (selector, fn) {
-  var button = document.querySelector(selector);
-  button.addEventListener("click", fn.bind(this));
-  button.addEventListener(this.eventTouchend, fn.bind(this));
 };

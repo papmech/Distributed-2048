@@ -36,27 +36,40 @@ ConnectionManager.prototype.connectToGameServer = function (hostport) {
     this.connection = new WebSocket(connectionString);
 
     this.connection.onopen = function() {
-         console.log("connection to the gameserver open");
-         console.log(self);
-         self.emit("connectionMade");
+        console.log("connection to the gameserver open");
+        console.log(self);
+        $("#connected-server").text(hostport);
+        self.emit("connectionMade");
     }
-    this.connection.onerror = function() {
+    this.connection.onerror = function(error) {
         console.log("error from connection with gameserver");
     }
     this.connection.onmessage = function(e) {
-         console.log("message received from gameserver");
-         var data = JSON && JSON.parse(e.data) || $.parseJSON(e.data);
-         console.log(data);
-         if (!self.boardHasBeenSet) {
-            self.boardHasBeenSet = true;
-            $(".load-wrapper").css( "display", "none" );
-         }
-         self.emit("update", data);
+        console.log("message received from gameserver");
+        var data = JSON && JSON.parse(e.data) || $.parseJSON(e.data);
+        console.log(data);
+        if (!self.boardHasBeenSet) {
+        self.boardHasBeenSet = true;
+        $(".load-wrapper").css( "display", "none" );
+        }
+        self.emit("update", data);
+    }
+    this.connection.onclose = function() {
+        console.log("Connection to the game server has been lost(Oh no, whyy?).");
+        self.getConnectionFromCServ();
     }
 };
 
-ConnectionManager.prototype.getConnectionFromCServ = function (data, status) {
+ConnectionManager.prototype.getConnectionFromCServ = function () {
     console.log(this);
+
+    var xmlHttp = null;
+    xmlHttp = new XMLHttpRequest();
+    //  xmlHttp.open( "GET", "http://128.237.201.5:25340", false );
+    xmlHttp.open( "GET", CENTRAL_HOSTPORT, false );
+    xmlHttp.send( null );
+    data = xmlHttp.responseText;
+
     var key = "Status";
     var unpacked = JSON && JSON.parse(data) || $.parseJSON(data);
 

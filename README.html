@@ -51,7 +51,7 @@ The servers agree on a majority move and update their respective game states, se
 
 <h2>Failure</h2>
 <p>
-    We are able to tolerate at most <i>p</i> failures given <i>2p-1</i> total servers courtesy of the paxos protocol. Upon connection failure, a client will repeatedly query the central server until it receives a new game server to connect to. This game server is not guaranteed to be alive. If it is not, the client will again ask the central server for a new server.
+    We are able to tolerate at most <i>p</i> failures given <i>2p+1</i> total servers courtesy of the paxos protocol. Upon connection failure, a client will repeatedly query the central server until it receives a new game server to connect to. This game server is not guaranteed to be alive. If it is not, the client will again ask the central server for a new server.
 </p>
 
 <h2>Testing</h2>

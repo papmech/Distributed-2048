@@ -99,6 +99,7 @@ function doStressTest {
 }
 
 function testOneClientOneGameYesCentral {
+  echo "testOneClientOneGameYesCentral"
   NUM_GAME_CLIENTS=1
   NUM_GAME_SERVERS=1
   NUM_MOVES=10
@@ -109,6 +110,7 @@ function testOneClientOneGameYesCentral {
 }
 
 function testFiveClientOneGameYesCentral {
+  echo "testFiveClientOneGameYesCentral"
   NUM_GAME_CLIENTS=5
   NUM_GAME_SERVERS=1
   NUM_MOVES=10
@@ -119,6 +121,7 @@ function testFiveClientOneGameYesCentral {
 }
 
 function testOneClientFiveGameYesCentral {
+  echo "testOneClientFiveGameYesCentral"
   NUM_GAME_CLIENTS=1
   NUM_GAME_SERVERS=5
   NUM_MOVES=10
@@ -129,6 +132,7 @@ function testOneClientFiveGameYesCentral {
 }
 
 function testThreeClientFiveGameYesCentral {
+  echo "testThreeClientFiveGameYesCentral"
   NUM_GAME_CLIENTS=3
   NUM_GAME_SERVERS=5
   NUM_MOVES=10
@@ -139,6 +143,7 @@ function testThreeClientFiveGameYesCentral {
 }
 
 function testTwentyFiveClientFiveGameYesCentral {
+  echo "testTwentyFiveClientFiveGameYesCentral"
   NUM_GAME_CLIENTS=25
   NUM_GAME_SERVERS=5
   NUM_MOVES=10
@@ -149,6 +154,7 @@ function testTwentyFiveClientFiveGameYesCentral {
 }
 
 function testTwentyFiveClientFiveGameYesCentralHundredMoves {
+  echo "testTwentyFiveClientFiveGameYesCentralHundredMoves"
   NUM_GAME_CLIENTS=25
   NUM_GAME_SERVERS=5
   NUM_MOVES=100
@@ -160,6 +166,7 @@ function testTwentyFiveClientFiveGameYesCentralHundredMoves {
 }
 
 function testTwentyFiveClientFiveGameYesCentralThousandMoves {
+  echo "testTwentyFiveClientFiveGameYesCentralThousandMoves"
   NUM_GAME_CLIENTS=25
   NUM_GAME_SERVERS=5
   NUM_MOVES=1000
@@ -171,6 +178,7 @@ function testTwentyFiveClientFiveGameYesCentralThousandMoves {
 }
 
 function testHundredClientTwentyFiveGameYesCentralThousandMoves {
+  echo "testHundredClientTwentyFiveGameYesCentralThousandMoves"
   NUM_GAME_CLIENTS=100
   NUM_GAME_SERVERS=25
   NUM_MOVES=1000
@@ -205,13 +213,13 @@ fi
 # Run tests
 PASS_COUNT=0
 FAIL_COUNT=0
-# testOneClientOneGameYesCentral
-# testFiveClientOneGameYesCentral
-# testOneClientFiveGameYesCentral
-# testThreeClientFiveGameYesCentral
-# testTwentyFiveClientFiveGameYesCentral
-# testTwentyFiveClientFiveGameYesCentralHundredMoves
-# testTwentyFiveClientFiveGameYesCentralThousandMoves
+testOneClientOneGameYesCentral
+testFiveClientOneGameYesCentral
+testOneClientFiveGameYesCentral
+testThreeClientFiveGameYesCentral
+testTwentyFiveClientFiveGameYesCentral
+testTwentyFiveClientFiveGameYesCentralHundredMoves
+testTwentyFiveClientFiveGameYesCentralThousandMoves
 testHundredClientTwentyFiveGameYesCentralThousandMoves
 echo "Passed (${PASS_COUNT}/$((PASS_COUNT + FAIL_COUNT))) tests"
 

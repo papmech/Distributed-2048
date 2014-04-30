@@ -22,8 +22,8 @@ type Libpaxos interface {
 	// Paxos round has completed and a new value has been decided upon.
 	DecidedHandler(handler func(proposal *paxosrpc.ProposalValue))
 	// SetInterruptFunc sets the function that will be called at the beginning
-	// of every Paxos related receiving step.
+	// of every Paxos related receiving step (i.e. ReceivePrepare,
+	// ReceiveAccept, ReceiveDecide). This is useful for inserting debugging
+	// or testing code, to lag / interrupt the server for example.
 	SetInterruptFunc(f func(id uint32, action PaxosAction, slotNumber uint32))
-
-	GetSlotBox() *SlotBox
 }

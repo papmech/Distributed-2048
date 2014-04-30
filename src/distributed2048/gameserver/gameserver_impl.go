@@ -148,7 +148,6 @@ func NewGameServer(centralServerHostPort, hostname string, port int, pattern str
 
 	go gs.ListenForClients()
 	go gs.processMoves()
-	// go gs.horseShit()
 	go gs.clientTasker()
 	go gs.clientMasterHandler()
 
@@ -265,6 +264,9 @@ func (gs *gameServer) processMoves() {
 
 				// Update the 2048 state
 				gs.game2048.MakeMove(majorityDir)
+				if gs.game2048.IsGameOver() {
+					gs.game2048 = lib2048.NewGame2048()
+				}
 
 				state := gs.getWrappedState()
 

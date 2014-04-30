@@ -22,6 +22,9 @@ func (n *node) getRPCClient() *rpc.Client {
 	n.Mutex.Lock()
 	if n.Client == nil {
 		c, _ := rpc.DialHTTP("tcp", n.Info.HostPort)
+		// if err != nil {
+		// 	fmt.Println(err)
+		// }
 		n.Client = c
 	}
 	n.Mutex.Unlock()

@@ -32,6 +32,10 @@ NUM_SENDING_GAME_CLIENTS=1
 SEND_MOVE_INTERVAL=1000
 TIMEOUT=15
 
+# Killer Arguments
+NUM_TO_KILL=1
+KILL_INTERVAL=10
+
 # Commands
 CENTRAL_SERVER=$GOPATH/bin/cservrunner
 GAME_SERVER=$GOPATH/bin/grunner
@@ -46,7 +50,7 @@ function startCentralServer {
 
 function stopCentralServer {
   # Kill the central server
-  kill -9 ${CENTRAL_SERVER_PID}
+  kill -9 ${CENTRAL_SERVER_PID} &> /dev/null
   wait ${CENTRAL_SERVER_PID} 2> /dev/null
 }
 
@@ -81,7 +85,7 @@ function stopGameServers {
   # Kill the game servers
   for (( i=0; i < $TOTAL_GAME_SERVERS_STARTED; i++))
   do
-      kill -9 ${GAME_SERVER_PID[$i]}
+      kill -9 ${GAME_SERVER_PID[$i]} &> /dev/null
       wait ${GAME_SERVER_PID[$i]} 2> /dev/null
   done
 }
@@ -98,6 +102,14 @@ function doTest {
   TIMEDOUT=false
   sleep ${TIMEOUT} && kill -9 ${TEST_PID} &> /dev/null && TIMEDOUT=true &
 
+  # Start slaughtering game servers
+  for (( i=0; i < $NUM_TO_KILL; i++ )); do
+    sleep ${KILL_INTERVAL}
+    NUM=$((i + 1))
+    echo "Killing game server $NUM/$NUM_TO_KILL"
+    kill -9 ${GAME_SERVER_PID[$i]} &> /dev/null
+  done
+
   wait ${TEST_PID} 2> /dev/null
   if [ "$?" -ne $PASS_RETURN_VAL ]; then
     FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -111,10 +123,10 @@ function doTest {
   stopCentralServer
 }
 
-function testOneClientOneSlightlyFaultyTwoGood {
-  echo "testOneClientOneSlightlyFaultyTwoGood"
+function testThreeClientThreeGameOneFailure {
+  echo "testOneClientThreeGameOneFailure"
   # Game server args
-  NUM_FAULTY_GAME_SERVERS=1
+  NUM_FAULTY_GAME_SERVERS=0
   FAULTY_PERCENT=10
   LAG_DURATION=2
   LAG_PREPARE=true
@@ -123,82 +135,71 @@ function testOneClientOneSlightlyFaultyTwoGood {
   MAX_LAG_SLOTNUMBER=17
 
   # Stress binary
-  NUM_GAME_CLIENTS=1
+  NUM_GAME_CLIENTS=3
   NUM_GAME_SERVERS=3
-  NUM_MOVES=20
+  NUM_MOVES=10
   NUM_SENDING_GAME_CLIENTS=1
   SEND_MOVE_INTERVAL=1000
   USE_CENTRAL=true
   TIMEOUT=60
 
+  # Slaughter
+  NUM_TO_KILL=1
+  KILL_INTERVAL=5
+
   doTest
 }
 
-function testTwelveClientOneSlightlyFaultyTwoGood {
-  echo "testTwelveClientOneSlightlyFaultyTwoGood"
+function testNineClientThreeGameOneFailure {
+  echo "testNineClientThreeGameOneFailure"
   # Game server args
-  NUM_FAULTY_GAME_SERVERS=1
+  NUM_FAULTY_GAME_SERVERS=0
   FAULTY_PERCENT=10
   LAG_DURATION=2
   LAG_PREPARE=true
   LAG_ACCEPT=true
   LAG_DECIDE=false
-  MAX_LAG_SLOTNUMBER=50
+  MAX_LAG_SLOTNUMBER=17
 
   # Stress binary
-  NUM_GAME_CLIENTS=12
+  NUM_GAME_CLIENTS=9
   NUM_GAME_SERVERS=3
-  NUM_MOVES=20
-  NUM_SENDING_GAME_CLIENTS=12
+  NUM_MOVES=10
+  NUM_SENDING_GAME_CLIENTS=1
   SEND_MOVE_INTERVAL=1000
   USE_CENTRAL=true
   TIMEOUT=60
 
-  doTest
-}
-
-function testTwelveClientTwoQuiteFaultyThreeGood {
-  echo "testTwelveClientTwoQuiteFaultyThreeGood"
-  # Game server args
-  NUM_FAULTY_GAME_SERVERS=2
-  FAULTY_PERCENT=20
-  LAG_DURATION=5
-  LAG_PREPARE=true
-  LAG_ACCEPT=true
-  LAG_DECIDE=true
-  MAX_LAG_SLOTNUMBER=60
-
-  # Stress binary
-  NUM_GAME_CLIENTS=12
-  NUM_GAME_SERVERS=5
-  NUM_MOVES=20
-  NUM_SENDING_GAME_CLIENTS=12
-  SEND_MOVE_INTERVAL=1000
-  USE_CENTRAL=true
-  TIMEOUT=150
+  # Slaughter
+  NUM_TO_KILL=1
+  KILL_INTERVAL=5
 
   doTest
 }
 
-function testTwelveClientFiveFaulty {
-  echo "testTwelveClientFiveFaulty"
+function testTwentyClientFiveGameTwoFailure {
+  echo "testTwentyClientFiveGameTwoFailure"
   # Game server args
-  NUM_FAULTY_GAME_SERVERS=5
+  NUM_FAULTY_GAME_SERVERS=0
   FAULTY_PERCENT=10
-  LAG_DURATION=5
+  LAG_DURATION=2
   LAG_PREPARE=true
   LAG_ACCEPT=true
-  LAG_DECIDE=true
-  MAX_LAG_SLOTNUMBER=30
+  LAG_DECIDE=false
+  MAX_LAG_SLOTNUMBER=17
 
   # Stress binary
-  NUM_GAME_CLIENTS=12
+  NUM_GAME_CLIENTS=20
   NUM_GAME_SERVERS=5
-  NUM_MOVES=50
-  NUM_SENDING_GAME_CLIENTS=12
+  NUM_MOVES=15
+  NUM_SENDING_GAME_CLIENTS=1
   SEND_MOVE_INTERVAL=1000
   USE_CENTRAL=true
-  TIMEOUT=600
+  TIMEOUT=60
+
+  # Slaughter
+  NUM_TO_KILL=2
+  KILL_INTERVAL=5
 
   doTest
 }
@@ -227,10 +228,9 @@ fi
 # Run tests
 PASS_COUNT=0
 FAIL_COUNT=0
-testOneClientOneSlightlyFaultyTwoGood
-testTwelveClientOneSlightlyFaultyTwoGood
-testTwelveClientTwoQuiteFaultyThreeGood
-testTwelveClientFiveFaulty
+testThreeClientThreeGameOneFailure
+testNineClientThreeGameOneFailure
+testTwentyClientFiveGameTwoFailure
 
 echo "Passed (${PASS_COUNT}/$((PASS_COUNT + FAIL_COUNT))) tests"
 

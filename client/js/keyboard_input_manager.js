@@ -23,7 +23,7 @@ function KeyboardInputManager() {
         self.moveStack = [];
         self.emit("move", lastMove);
     }
-  }, 1000);
+  }, 100);
 }
 
 KeyboardInputManager.prototype.on = function (event, callback) {

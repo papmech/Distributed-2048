@@ -50,7 +50,7 @@ function startCentralServer {
 
 function stopCentralServer {
   # Kill the central server
-  kill -9 ${CENTRAL_SERVER_PID}
+  kill -9 ${CENTRAL_SERVER_PID} &> /dev/null
   wait ${CENTRAL_SERVER_PID} 2> /dev/null
 }
 
@@ -85,7 +85,7 @@ function stopGameServers {
   # Kill the game servers
   for (( i=0; i < $TOTAL_GAME_SERVERS_STARTED; i++))
   do
-      kill -9 ${GAME_SERVER_PID[$i]}
+      kill -9 ${GAME_SERVER_PID[$i]} &> /dev/null
       wait ${GAME_SERVER_PID[$i]} 2> /dev/null
   done
 }
@@ -107,7 +107,7 @@ function doTest {
     sleep ${KILL_INTERVAL}
     NUM=$((i + 1))
     echo "Killing game server $NUM/$NUM_TO_KILL"
-    kill -9 ${GAME_SERVER_PID[$i]}
+    kill -9 ${GAME_SERVER_PID[$i]} &> /dev/null
   done
 
   wait ${TEST_PID} 2> /dev/null
@@ -137,7 +137,7 @@ function testThreeClientThreeGameOneFailure {
   # Stress binary
   NUM_GAME_CLIENTS=3
   NUM_GAME_SERVERS=3
-  NUM_MOVES=20
+  NUM_MOVES=10
   NUM_SENDING_GAME_CLIENTS=1
   SEND_MOVE_INTERVAL=1000
   USE_CENTRAL=true
@@ -145,13 +145,13 @@ function testThreeClientThreeGameOneFailure {
 
   # Slaughter
   NUM_TO_KILL=1
-  KILL_INTERVAL=4
+  KILL_INTERVAL=5
 
   doTest
 }
 
 function testNineClientThreeGameOneFailure {
-  echo "testOneClientFiveGameTwoFailure"
+  echo "testNineClientThreeGameOneFailure"
   # Game server args
   NUM_FAULTY_GAME_SERVERS=0
   FAULTY_PERCENT=10
@@ -164,7 +164,7 @@ function testNineClientThreeGameOneFailure {
   # Stress binary
   NUM_GAME_CLIENTS=9
   NUM_GAME_SERVERS=3
-  NUM_MOVES=20
+  NUM_MOVES=10
   NUM_SENDING_GAME_CLIENTS=1
   SEND_MOVE_INTERVAL=1000
   USE_CENTRAL=true
@@ -172,13 +172,13 @@ function testNineClientThreeGameOneFailure {
 
   # Slaughter
   NUM_TO_KILL=1
-  KILL_INTERVAL=10
+  KILL_INTERVAL=5
 
   doTest
 }
 
 function testTwentyClientFiveGameTwoFailure {
-  echo "testOneClientFiveGameTwoFailure"
+  echo "testTwentyClientFiveGameTwoFailure"
   # Game server args
   NUM_FAULTY_GAME_SERVERS=0
   FAULTY_PERCENT=10
@@ -191,7 +191,7 @@ function testTwentyClientFiveGameTwoFailure {
   # Stress binary
   NUM_GAME_CLIENTS=20
   NUM_GAME_SERVERS=5
-  NUM_MOVES=40
+  NUM_MOVES=15
   NUM_SENDING_GAME_CLIENTS=1
   SEND_MOVE_INTERVAL=1000
   USE_CENTRAL=true
@@ -199,7 +199,7 @@ function testTwentyClientFiveGameTwoFailure {
 
   # Slaughter
   NUM_TO_KILL=2
-  KILL_INTERVAL=10
+  KILL_INTERVAL=5
 
   doTest
 }
@@ -229,8 +229,8 @@ fi
 PASS_COUNT=0
 FAIL_COUNT=0
 testThreeClientThreeGameOneFailure
-# testNineClientThreeGameOneFailure
-# testTwentyClientFiveGameTwoFailure
+testNineClientThreeGameOneFailure
+testTwentyClientFiveGameTwoFailure
 
 echo "Passed (${PASS_COUNT}/$((PASS_COUNT + FAIL_COUNT))) tests"
 

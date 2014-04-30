@@ -44,7 +44,6 @@ func (gd *GameData) CopyInto(game lib2048.Game2048) {
 
 type ProposalValue struct {
 	Moves []lib2048.Move
-	Game  GameData
 }
 
 type Proposal struct {

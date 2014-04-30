@@ -56,7 +56,7 @@ func testOneCentralOneClientOneGameserv() {
 	// Step 3: Test
 	for _, m := range movelist {
 		cli.InputMove(m.Direction)
-		time.Sleep(1 * time.Second)
+		time.Sleep(1000 * time.Millisecond) // has to be large enough so one move per paxos round
 	}
 
 	LOGV.Println("CLI's game state")

@@ -145,7 +145,7 @@ function testThreeClientThreeGameOneFailure {
 
   # Slaughter
   NUM_TO_KILL=1
-  KILL_INTERVAL=10
+  KILL_INTERVAL=4
 
   doTest
 }
@@ -229,8 +229,8 @@ fi
 PASS_COUNT=0
 FAIL_COUNT=0
 testThreeClientThreeGameOneFailure
-testNineClientThreeGameOneFailure
-testTwentyClientFiveGameTwoFailure
+# testNineClientThreeGameOneFailure
+# testTwentyClientFiveGameTwoFailure
 
 echo "Passed (${PASS_COUNT}/$((PASS_COUNT + FAIL_COUNT))) tests"
 

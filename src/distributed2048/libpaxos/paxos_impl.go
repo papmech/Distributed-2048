@@ -22,7 +22,7 @@ const (
 	ERROR_LOG          bool = false
 	DEBUG_LOG          bool = false
 	DUMP_SLOTS         bool = false
-	SHOW_DECIDED_SLOTS bool = false
+	SHOW_DECIDED_SLOTS bool = true
 )
 
 var LOGV = util.NewLogger(DEBUG_LOG, "PAXOS|DEBUG", os.Stdout)
@@ -80,7 +80,6 @@ func NewLibpaxos(nodeID uint32, hostport string, allNodes []paxosrpc.Node) (Libp
 	go http.Serve(l, nil)
 
 	go lp.controller()
-	go lp.handleCaller()
 	if DUMP_SLOTS { // Writes the contents of slotbox to file at fixed intervals
 		go lp.dumpSlots()
 	}
@@ -133,6 +132,7 @@ func (lp *libpaxos) ReceiveAccept(args *paxosrpc.ReceiveAcceptArgs, reply *paxos
 	if lp.interruptFunc != nil {
 		lp.interruptFunc(lp.myNode.ID, Accept, lp.slotBox.nextUnknownSlotNumber)
 	}
+
 	lp.dataMutex.Lock()
 
 	lp.slotBoxMutex.Lock()
@@ -188,36 +188,14 @@ func (lp *libpaxos) DecidedHandler(handler func(proposal *paxosrpc.ProposalValue
 	lp.decidedHandler = handler
 }
 
-// handleCaller is triggered by sending to triggerHandlerCallCh to check if
-// the next unread slot can be sent to the handler.
-func (lp *libpaxos) handleCaller() {
-	for {
-		select {
-		case <-lp.triggerHandlerCallCh:
-			for {
-				lp.slotBoxMutex.Lock()
-				slot := lp.slotBox.GetNextUnreadSlot()
-				lp.slotBoxMutex.Unlock()
-				if slot == nil {
-					break
-				}
-				if lp.decidedHandler != nil {
-					if SHOW_DECIDED_SLOTS {
-						fmt.Println("Node", lp.myNode.ID, "got slot", slot.Number)
-					}
-					lp.decidedHandler(slot.Value)
-				}
-			}
-		}
-	}
-}
-
 // controller handles the arrival of new proposal values, and also what
 // happens when a paxos round is complete.
 //
-// New values should be queue if a paxos round is in progress.
+// New values should be queue if a paxos instance is in progress.
 //
-// When a paxos round completes, the next value in the queue is proposed.
+// When a paxos instance completes, the next value in the queue is proposed.
+// If a new decided value was received, we notify the user if the slot box
+// allows it.
 func (lp *libpaxos) controller() {
 	proposalInProgress := false
 	doneCh := make(chan struct{})
@@ -243,6 +221,23 @@ func (lp *libpaxos) controller() {
 				proposalInProgress = false
 			}
 			lp.newValuesQueueLock.Unlock()
+		case <-lp.triggerHandlerCallCh:
+			for {
+				lp.slotBoxMutex.Lock()
+				slot := lp.slotBox.GetNextUnreadSlot()
+				lp.slotBoxMutex.Unlock()
+				if slot == nil {
+					break
+				}
+				if lp.decidedHandler != nil {
+					if SHOW_DECIDED_SLOTS {
+						fmt.Println("Node", lp.myNode.ID, "got slot", slot.Number)
+					}
+					// this function call could potentially block for a long
+					// time, so we call it in a new goroutine
+					go lp.decidedHandler(slot.Value)
+				}
+			}
 		}
 	}
 }
@@ -336,7 +331,9 @@ func (lp *libpaxos) doPropose(value *paxosrpc.ProposalValue, doneCh chan<- struc
 			continue // try again
 		}
 
+		// This is the proposal that we will be sending out in PHASE 2
 		propToAccept := otherProposal
+
 		if otherProposal == nil {
 			propToAccept = myProp
 		}
@@ -442,7 +439,8 @@ func rpcCallWithTimeout(client *rpc.Client, serviceMethod string, args, reply in
 	return false, nil
 }
 
-// dumpSlots writes the
+// dumpSlots writes the contents of slotbox to a timestamped file at fixed
+// time intervals
 func (lp *libpaxos) dumpSlots() {
 	ticker := time.NewTicker(5 * time.Second)
 	for {

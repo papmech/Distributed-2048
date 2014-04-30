@@ -106,6 +106,16 @@ GameManager.prototype.move = function (dir) {
     console.log("direction of proposed move is" + dir);
     var message = {Direction: dir};
     console.log("sending move: " + dir);
+    var dirtext = "";
+    if (dir == 0)
+        dirtext = "Up"
+    else if (dir == 1)
+        dirtext = "Right"
+    else if (dir == 2)
+        dirtext = "Down"
+    else if (dir == 3)
+        dirtext = "Left"
+    $("#yourmove").text(dirtext);
     this.connManager.connection.send(JSON.stringify(message));
 };
 
@@ -133,6 +143,7 @@ GameManager.prototype.update = function (data) {
     }
     console.log(this.grid);
     this.actuate();
+    $("#theirmove").text(data.Consensus);
     return;
 };
 

@@ -34,6 +34,7 @@ type Game2048State struct {
 	Over  bool
 	Grid  lib2048.Grid
 	Score int
+	Consensus string
 }
 
 func (s *Game2048State) String() string {

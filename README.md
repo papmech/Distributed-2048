@@ -24,6 +24,9 @@
         <b>Distributed replication</b>: We are using Paxos as a consensus and backup protocol among the servers.
     </li>
 </ul>
+<h2>Requirements</h2>
+<p>This project uses the excellent go websockets implementation found at <a href="http://godoc.org/code.google.com/p/go.net/websocket">http://godoc.org/code.google.com/p/go.net/websocket</a>. Please run <strong>go get "code.google.com/p/go.net/websocket"</strong> before running anything.</p>
+
 <h2>Mechanics</h2>
 <p>
 We will first launch the central server and provide a specific number of game servers that we expect to be connected. Next we will launch the game servers that will register with the central server.
@@ -56,7 +59,27 @@ The servers agree on a majority move and update their respective game states, se
 
 <h2>Testing</h2>
 <p>
-    We wrote a Go client that runs on the command line specifically for testing purposes. In terms of functionality it is exactly the same as the javascript client. However, we modified it such that it could take a sequence of moves and send them at specified intervals to a gameserver, and is able to return the game state at any point in time. We have a function that simulates running an expected sequence of moves to arrive at some game state. We would then compare the board states to test if the outcome is as expected. We wrote tests with differing number of clients and servers and various scenarios to verify the robustness, correctness, and capacity of the system. 
+    We wrote a Go client that runs on the command line specifically for testing purposes. In terms of functionality it is exactly the same as the javascript client. However, we modified it such that it could take a sequence of moves and send them at specified intervals to a gameserver, and is able to return the game state at any point in time. We have a function that simulates running an expected sequence of moves to arrive at some game state. We would then compare the board states to test if the outcome is as expected. We wrote tests with differing number of clients and servers and various scenarios to verify the robustness, correctness, and capacity of the system.
+</p>
+<p>
+    Test files are run exactly as they are without necessary arguments.
+    <ul>
+        <li>
+            <b>simpletest.sh</b>: A single test that serves more of an end-to-end sanity check that everything works as it should.
+        </li>
+        <li>
+            <b>stresstests.sh</b>: Tests with increasing number of clients, moves, and decreasing move intervals.
+        </li>
+        <li>
+            <b>interruptedtests.sh</b>: Introducing random delays (a.k.a. lag) of increasing length into the Paxos instances, so that RPC calls time out and message ordering is totally messed up.
+        </li>
+        <li>
+            <b>failtest.sh</b>: Kill servers and check that game clients reconnect to another server, game state is preserved and replicated correctly via successful Paxos rounds.
+        </li>
+        <li>
+            <b>killall.sh</b>: Not a test file, but useful for killing test processes if user Ctrl+C out of the test.
+        </li>
+    </ul>
 </p>
 <h2>Credits</h2>
 <p>
